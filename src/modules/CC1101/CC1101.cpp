@@ -8,8 +8,8 @@ CC1101::CC1101(Module* module) : PhysicalLayer(RADIOLIB_CC1101_FREQUENCY_STEP_SI
 
 int16_t CC1101::begin(float freq, float br, float freqDev, float rxBw, int8_t pwr, uint8_t preambleLength) {
   // set module properties
-  this->mod->SPIreadCommand = RADIOLIB_CC1101_CMD_READ;
-  this->mod->SPIwriteCommand = RADIOLIB_CC1101_CMD_WRITE;
+  this->mod->spiConfig.cmds[RADIOLIB_MODULE_SPI_COMMAND_READ] = RADIOLIB_CC1101_CMD_READ;
+  this->mod->spiConfig.cmds[RADIOLIB_MODULE_SPI_COMMAND_WRITE] = RADIOLIB_CC1101_CMD_WRITE;
   this->mod->init();
   this->mod->hal->pinMode(this->mod->getIrq(), this->mod->hal->GpioModeInput);
 
@@ -100,14 +100,14 @@ void CC1101::reset() {
 
 int16_t CC1101::transmit(uint8_t* data, size_t len, uint8_t addr) {
   // calculate timeout (5ms + 500 % of expected time-on-air)
-  uint32_t timeout = 5 + (uint32_t)((((float)(len * 8)) / this->bitRate) * 5);
+  RadioLibTime_t timeout = 5 + (RadioLibTime_t)((((float)(len * 8)) / this->bitRate) * 5);
 
   // start transmission
   int16_t state = startTransmit(data, len, addr);
   RADIOLIB_ASSERT(state);
 
   // wait for transmission start or timeout
-  uint32_t start = this->mod->hal->millis();
+  RadioLibTime_t start = this->mod->hal->millis();
   while(!this->mod->hal->digitalRead(this->mod->getGpio())) {
     this->mod->hal->yield();
 
@@ -133,14 +133,14 @@ int16_t CC1101::transmit(uint8_t* data, size_t len, uint8_t addr) {
 
 int16_t CC1101::receive(uint8_t* data, size_t len) {
   // calculate timeout (500 ms + 400 full max-length packets at current bit rate)
-  uint32_t timeout = 500 + (1.0/(this->bitRate))*(RADIOLIB_CC1101_MAX_PACKET_LENGTH*400.0);
+  RadioLibTime_t timeout = 500 + (1.0/(this->bitRate))*(RADIOLIB_CC1101_MAX_PACKET_LENGTH*400.0);
 
   // start reception
   int16_t state = startReceive();
   RADIOLIB_ASSERT(state);
 
   // wait for packet start or timeout
-  uint32_t start = this->mod->hal->millis();
+  RadioLibTime_t start = this->mod->hal->millis();
   while(this->mod->hal->digitalRead(this->mod->getIrq())) {
     this->mod->hal->yield();
 
@@ -172,7 +172,7 @@ int16_t CC1101::standby() {
   SPIsendCommand(RADIOLIB_CC1101_CMD_IDLE);
 
   // wait until idle is reached
-  uint32_t start = this->mod->hal->millis();
+  RadioLibTime_t start = this->mod->hal->millis();
   while(SPIgetRegValue(RADIOLIB_CC1101_REG_MARCSTATE, 4, 0) != RADIOLIB_CC1101_MARC_STATE_IDLE) {
     mod->hal->yield();
     if(this->mod->hal->millis() - start > 100) {
@@ -758,7 +758,7 @@ int16_t CC1101::setOOK(bool enableOOK) {
 float CC1101::getRSSI() {
   float rssi;
 
-  if (this->directModeEnabled) {
+  if(!this->directModeEnabled) {
     if(this->rawRSSI >= 128) {
       rssi = (((float)this->rawRSSI - 256.0)/2.0) - 74.0;
     } else {
@@ -766,12 +766,9 @@ float CC1101::getRSSI() {
     }
   } else {
     uint8_t rawRssi = SPIreadRegister(RADIOLIB_CC1101_REG_RSSI);
-    if (rawRssi >= 128)
-    {
+    if(rawRssi >= 128) {
       rssi = ((rawRssi - 256) / 2) - 74;
-    }
-    else
-    {
+    } else {
       rssi = (rawRssi / 2) - 74;
     }
   }

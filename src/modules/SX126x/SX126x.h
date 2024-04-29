@@ -188,6 +188,18 @@
 #define RADIOLIB_SX126X_CALIBRATE_RC64K_ON                      0b00000001  //  0     0                               enabled
 #define RADIOLIB_SX126X_CALIBRATE_ALL                           0b01111111  //  6     0   calibrate all blocks
 
+//RADIOLIB_SX126X_CMD_CALIBRATE_IMAGE
+#define RADIOLIB_SX126X_CAL_IMG_430_MHZ_1                       0x6B
+#define RADIOLIB_SX126X_CAL_IMG_430_MHZ_2                       0x6F
+#define RADIOLIB_SX126X_CAL_IMG_470_MHZ_1                       0x75
+#define RADIOLIB_SX126X_CAL_IMG_470_MHZ_2                       0x81
+#define RADIOLIB_SX126X_CAL_IMG_779_MHZ_1                       0xC1
+#define RADIOLIB_SX126X_CAL_IMG_779_MHZ_2                       0xC5
+#define RADIOLIB_SX126X_CAL_IMG_863_MHZ_1                       0xD7
+#define RADIOLIB_SX126X_CAL_IMG_863_MHZ_2                       0xDB
+#define RADIOLIB_SX126X_CAL_IMG_902_MHZ_1                       0xE1
+#define RADIOLIB_SX126X_CAL_IMG_902_MHZ_2                       0xE9
+
 //RADIOLIB_SX126X_CMD_SET_PA_CONFIG
 #define RADIOLIB_SX126X_PA_CONFIG_HP_MAX                        0x07
 #define RADIOLIB_SX126X_PA_CONFIG_PA_LUT                        0x01
@@ -945,14 +957,14 @@ class SX126x: public PhysicalLayer {
       \param len Payload length in bytes.
       \returns Expected time-on-air in microseconds.
     */
-    uint32_t getTimeOnAir(size_t len) override;
+    RadioLibTime_t getTimeOnAir(size_t len) override;
 
     /*!
       \brief Calculate the timeout value for this specific module / series (in number of symbols or units of time)
       \param timeoutUs Timeout in microseconds to listen for
       \returns Timeout value in a unit that is specific for the used module
     */
-    uint32_t calculateRxTimeout(uint32_t timeoutUs);
+    RadioLibTime_t calculateRxTimeout(RadioLibTime_t timeoutUs);
 
     /*!
       \brief Create the flags that make up RxDone and RxTimeout used for receiving downlinks
@@ -1102,6 +1114,21 @@ class SX126x: public PhysicalLayer {
     */
     int16_t setPaConfig(uint8_t paDutyCycle, uint8_t deviceSel, uint8_t hpMax = RADIOLIB_SX126X_PA_CONFIG_HP_MAX, uint8_t paLut = RADIOLIB_SX126X_PA_CONFIG_PA_LUT);
 
+    /*!
+      \brief Perform image rejection calibration for the specified frequency band.
+      WARNING: Use at your own risk! Setting incorrect values may lead to decreased performance
+      \param freqMin Frequency band lower bound.
+      \param freqMax Frequency band upper bound.
+      \returns \ref status_codes
+    */
+    int16_t calibrateImageRejection(float freqMin, float freqMax);
+
+    /*!
+      \brief Set PA ramp-up time. Set to 200us by default.
+      \returns \ref status_codes
+    */
+    int16_t setPaRampTime(uint8_t rampTime);
+
 #if !RADIOLIB_GODMODE && !RADIOLIB_LOW_LEVEL
   protected:
 #endif
@@ -1119,9 +1146,9 @@ class SX126x: public PhysicalLayer {
     int16_t setDioIrqParams(uint16_t irqMask, uint16_t dio1Mask, uint16_t dio2Mask = RADIOLIB_SX126X_IRQ_NONE, uint16_t dio3Mask = RADIOLIB_SX126X_IRQ_NONE);
     virtual int16_t clearIrqStatus(uint16_t clearIrqParams = RADIOLIB_SX126X_IRQ_ALL);
     int16_t setRfFrequency(uint32_t frf);
-    int16_t calibrateImage(float freqMin, float freqMax);
+    int16_t calibrateImage(uint8_t* data);
     uint8_t getPacketType();
-    int16_t setTxParams(uint8_t power, uint8_t rampTime = RADIOLIB_SX126X_PA_RAMP_200U);
+    int16_t setTxParams(uint8_t power, uint8_t rampTime);
     int16_t setModulationParams(uint8_t sf, uint8_t bw, uint8_t cr, uint8_t ldro);
     int16_t setModulationParamsFSK(uint32_t br, uint8_t sh, uint8_t rxBw, uint32_t freqDev);
     int16_t setPacketParams(uint16_t preambleLen, uint8_t crcType, uint8_t payloadLen, uint8_t hdrType, uint8_t invertIQ);
@@ -1166,6 +1193,7 @@ class SX126x: public PhysicalLayer {
     float dataRateMeasured = 0;
 
     uint32_t tcxoDelay = 0;
+    uint8_t pwr = 0;
 
     size_t implicitLen = 0;
     uint8_t invertIQEnabled = RADIOLIB_SX126X_LORA_IQ_STANDARD;
