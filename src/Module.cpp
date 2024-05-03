@@ -76,13 +76,18 @@ int16_t Module::SPIsetRegValue(uint32_t reg, uint8_t value, uint8_t msb, uint8_t
     // check register value each millisecond until check interval is reached
     // some registers need a bit of time to process the change (e.g. SX127X_REG_OP_MODE)
     RadioLibTime_t start = this->hal->micros();
+    #if RADIOLIB_DEBUG_SPI
     uint8_t readValue = 0x00;
+    #endif
     while(this->hal->micros() - start < (checkInterval * 1000)) {
-      readValue = SPIreadRegister(reg);
-      if((readValue & checkMask) == (newValue & checkMask)) {
+      uint8_t val = SPIreadRegister(reg);
+      if((val & checkMask) == (newValue & checkMask)) {
         // check passed, we can stop the loop
         return(RADIOLIB_ERR_NONE);
       }
+      #if RADIOLIB_DEBUG_SPI
+      readValue = val;
+      #endif
     }
 
     // check failed, print debug info
@@ -309,17 +314,15 @@ int16_t Module::SPIcheckStream() {
 }
 
 int16_t Module::SPItransferStream(uint8_t* cmd, uint8_t cmdLen, bool write, uint8_t* dataOut, uint8_t* dataIn, size_t numBytes, bool waitForGpio, RadioLibTime_t timeout) {
-  // prepare the buffers
+  // prepare the output buffer
   size_t buffLen = cmdLen + numBytes;
   if(!write) {
     buffLen += (this->spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_STATUS] / 8);
   }
   #if RADIOLIB_STATIC_ONLY
     uint8_t buffOut[RADIOLIB_STATIC_ARRAY_SIZE];
-    uint8_t buffIn[RADIOLIB_STATIC_ARRAY_SIZE];
   #else
     uint8_t* buffOut = new uint8_t[buffLen];
-    uint8_t* buffIn = new uint8_t[buffLen];
   #endif
   uint8_t* buffOutPtr = buffOut;
 
@@ -346,12 +349,18 @@ int16_t Module::SPItransferStream(uint8_t* cmd, uint8_t cmdLen, bool write, uint
         RADIOLIB_DEBUG_BASIC_PRINTLN("GPIO pre-transfer timeout, is it connected?");
         #if !RADIOLIB_STATIC_ONLY
           delete[] buffOut;
-          delete[] buffIn;
         #endif
         return(RADIOLIB_ERR_SPI_CMD_TIMEOUT);
       }
     }
   }
+
+  // prepare the input buffer
+  #if RADIOLIB_STATIC_ONLY
+    uint8_t buffIn[RADIOLIB_STATIC_ARRAY_SIZE];
+  #else
+    uint8_t* buffIn = new uint8_t[buffLen];
+  #endif
 
   // do the transfer
   this->hal->spiBeginTransaction();
@@ -462,7 +471,7 @@ uint32_t Module::reflect(uint32_t in, uint8_t bits) {
 void Module::hexdump(const char* level, uint8_t* data, size_t len, uint32_t offset, uint8_t width, bool be) {
   size_t rem_len = len;
   for(size_t i = 0; i < len; i+=16) {
-    char str[80];
+    char str[120];
     sprintf(str, "%07" PRIx32 "  ", i+offset);
     size_t line_len = 16;
     if(rem_len < line_len) {
@@ -488,15 +497,21 @@ void Module::hexdump(const char* level, uint8_t* data, size_t len, uint32_t offs
     }
     str[56] = '|';
     str[57] = ' ';
+
+    // at this point we need to start escaping "%" characters
+    char* strPtr = &str[58];
     for(size_t j = 0; j < line_len; j++) {
       char c = data[i+j];
       if((c < ' ') || (c > '~')) {
         c = '.';
+      } else if(c == '%') {
+        *strPtr++ = '%';
       }
-      sprintf(&str[58 + j], "%c", c);
+      sprintf(strPtr++, "%c", c);
+      
     }
     for(size_t j = line_len; j < 16; j++) {
-      sprintf(&str[58 + j], "   ");
+      sprintf(strPtr++, "   ");
     }
     if(level) {
       RADIOLIB_DEBUG_PRINT(level);
@@ -539,7 +554,7 @@ size_t Module::serialPrintf(const char* format, ...) {
     vsnprintf(buffer, len + 1, format, arg);
     va_end(arg);
   }
-  len = RADIOLIB_DEBUG_PORT.write((const uint8_t*)buffer, len);
+  len = RADIOLIB_DEBUG_PORT.write(reinterpret_cast<const uint8_t*>(buffer), len);
   if (buffer != temp) {
     delete[] buffer;
   }
