@@ -551,7 +551,7 @@ class SX128x: public PhysicalLayer {
       \param len Only for PhysicalLayer compatibility, not used.
       \returns \ref status_codes
     */
-    int16_t startReceive(uint16_t timeout, uint16_t irqFlags = RADIOLIB_SX128X_IRQ_RX_DEFAULT, uint16_t irqMask = RADIOLIB_SX128X_IRQ_RX_DONE, size_t len = 0);
+    int16_t startReceive(uint16_t timeout, uint32_t irqFlags = RADIOLIB_SX128X_IRQ_RX_DEFAULT, uint32_t irqMask = RADIOLIB_SX128X_IRQ_RX_DONE, size_t len = 0);
 
     /*!
       \brief Reads the current IRQ status.
@@ -568,6 +568,19 @@ class SX128x: public PhysicalLayer {
       \returns \ref status_codes
     */
     int16_t readData(uint8_t* data, size_t len) override;
+    
+    /*!
+      \brief Interrupt-driven channel activity detection method. DIO1 will be activated
+      when LoRa preamble is detected, or upon timeout. Defaults to CAD parameter values recommended by AN1200.48.
+      \returns \ref status_codes
+    */
+    int16_t startChannelScan() override;
+
+    /*!
+      \brief Read the channel scan result
+      \returns \ref status_codes
+    */
+    int16_t getChannelScanResult() override;
 
     // configuration methods
 

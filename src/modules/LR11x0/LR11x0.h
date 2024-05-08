@@ -472,10 +472,15 @@
 #define RADIOLIB_LR11X0_WIFI_ACQ_MODE_SSID_BEACON               (0x05UL << 0)   //  7     0                             SSID beacon
 #define RADIOLIB_LR11X0_WIFI_ABORT_ON_TIMEOUT_ENABLED           (0x01UL << 0)   //  7     0     abort scanning on preamble timeout: enabled
 #define RADIOLIB_LR11X0_WIFI_ABORT_ON_TIMEOUT_DISABLED          (0x00UL << 0)   //  7     0                                         disabled
+#define RADIOLIB_LR11X0_WIFI_MAX_NUM_RESULTS                    (32)            //  7     0     maximum possible number of Wi-Fi scan results
+#define RADIOLIB_LR11X0_WIFI_ALL_CHANNELS                       (0x3FFFUL)      //  16    0     scan all channels
 
 // RADIOLIB_LR11X0_CMD_WIFI_READ_RESULTS
 #define RADIOLIB_LR11X0_WIFI_RESULT_TYPE_COMPLETE               (0x01UL << 0)   //  7     0     Wi-Fi scan result type: complete
 #define RADIOLIB_LR11X0_WIFI_RESULT_TYPE_BASIC                  (0x04UL << 0)   //  7     0                             basic
+#define RADIOLIB_LR11X0_WIFI_RESULT_MAX_LEN                     (79)            //  7     0     maximum possible Wi-Fi scan size
+#define RADIOLIB_LR11X0_WIFI_RESULT_MAC_LEN                     (6)             //  7     0     MAC address length in bytes
+#define RADIOLIB_LR11X0_WIFI_RESULT_SSID_LEN                    (32)            //  7     0     SSID length in bytes
 
 // RADIOLIB_LR11X0_CMD_GNSS_SET_CONSTELLATION_TO_USE
 #define RADIOLIB_LR11X0_GNSS_CONSTELLATION_GPS                  (0x01UL << 0)   //  7     0     GNSS constellation to use: GPS
@@ -536,10 +541,108 @@
 // RADIOLIB_LR11X0_REG_LORA_HIGH_POWER_FIX
 #define RADIOLIB_LR11X0_LORA_HIGH_POWER_FIX                     (0x00UL << 30)  //  30    30    fix for errata
 
+/*!
+  \struct LR11x0WifiResult_t
+  \brief Structure to save result of passive WiFi scan.
+  This result only saves the basic information.
+*/
+struct LR11x0WifiResult_t {
+  /*! \brief WiFi (802.11) signal type, 'b', 'n' or 'g' */
+  char type;
+
+  /*! \brief Data rate ID holding information about modulation and coding rate. See LR11x0 user manual for details. */
+  uint8_t dataRateId;
+
+  /*! \brief Channel frequency in MHz */
+  uint16_t channelFreq;
+
+  /*! \brief MAC address origin: from gateway (1), phone (2) or undetermined (3) */
+  uint8_t origin;
+
+  /*! \brief Whether this signal was sent by an access point (true) or end device (false) */
+  bool ap;
+
+  /*! \brief RSSI in dBm */
+  float rssi;
+
+  /*! \brief MAC address */
+  uint8_t mac[RADIOLIB_LR11X0_WIFI_RESULT_MAC_LEN];
+};
+
+/*!
+  \struct LR11x0WifiResultFull_t
+  \brief Structure to save result of passive WiFi scan.
+  This result saves additional information alongside that in LR11x0WifiResult_t.
+*/
+struct LR11x0WifiResultFull_t: public LR11x0WifiResult_t {
+  /*! \brief Frame type. See LR11x0 user manual for details. */
+  uint8_t frameType;
+
+  /*! \brief Frame sub type. See LR11x0 user manual for details. */
+  uint8_t frameSubType;
+
+  /*! \brief Frame sent from client station to distribution system. */
+  bool toDistributionSystem;
+
+  /*! \brief Frame sent from distribution system to client station. */
+  bool fromDistributionSystem;
+
+  /*! \brief See LR11x0 user manual for details. */
+  uint16_t phiOffset;
+
+  /*! \brief Number of microseconds the AP has been active. */
+  uint64_t timestamp;
+
+  /*! \brief Beacon period in microseconds. */
+  uint32_t periodBeacon;
+};
+
+/*!
+  \struct LR11x0WifiResultExtended_t
+  \brief Structure to save result of passive WiFi scan.
+  This result saves additional information alongside that in LR11x0WifiResultFull_t.
+  Only scans performed with RADIOLIB_LR11X0_WIFI_ACQ_MODE_FULL_BEACON acquisition mode
+  can yield this result!
+*/
+struct LR11x0WifiResultExtended_t: public LR11x0WifiResultFull_t {
+  /*! \brief Data rate. See LR11x0 user manual for details. */
+  uint8_t rate;
+
+  /*! \brief Refer to IEEE Std 802.11, 2016, Part 11: Wireless LAN MAC and PHY Spec. */
+  uint16_t service;
+
+  /*! \brief Refer to IEEE Std 802.11, 2016, Part 11: Wireless LAN MAC and PHY Spec. */
+  uint16_t length;
+
+  /*! \brief MAC address 0 */
+  uint8_t mac0[RADIOLIB_LR11X0_WIFI_RESULT_MAC_LEN];
+
+  /*! \brief MAC address 2 */
+  uint8_t mac2[RADIOLIB_LR11X0_WIFI_RESULT_MAC_LEN];
+
+  /*! \brief Refer to IEEE Std 802.11, 2016, Part 11: Wireless LAN MAC and PHY Spec. */
+  uint16_t seqCtrl;
+
+  /*! \brief SSID */
+  uint8_t ssid[RADIOLIB_LR11X0_WIFI_RESULT_SSID_LEN];
+
+  /*! \brief WiFi channel number */
+  uint8_t currentChannel;
+
+  /*! \brief Two-letter country code (null-terminated string). */
+  char countryCode[3];
+
+  /*! \brief Refer to IEEE Std 802.11, 2016, Part 11: Wireless LAN MAC and PHY Spec. */
+  uint8_t ioReg;
+
+  /*! \brief True if frame check sequences is valid, false otherwise. */
+  bool fcsCheckOk;
+};
 
 /*!
   \class LR11x0
-  \brief 
+  \brief Base class for %LR11x0 series. All derived classes for %LR11x0 (e.g. LR1110 or LR1120) inherit from this base class.
+  This class should not be instantiated directly from user code, only from its derived classes.
 */
 class LR11x0: public PhysicalLayer {
   public:
@@ -740,10 +843,11 @@ class LR11x0: public PhysicalLayer {
       If timeout other than infinite is set, signal will be generated on IRQ1.
 
       \param irqFlags Sets the IRQ flags that will trigger IRQ1, defaults to RADIOLIB_LR11X0_IRQ_RX_DONE.
+      \param irqMask Only for PhysicalLayer compatibility, not used.
       \param len Only for PhysicalLayer compatibility, not used.
       \returns \ref status_codes
     */
-    int16_t startReceive(uint32_t timeout, uint32_t irqFlags = RADIOLIB_LR11X0_IRQ_RX_DONE, size_t len = 0);
+    int16_t startReceive(uint32_t timeout, uint32_t irqFlags = RADIOLIB_LR11X0_IRQ_RX_DONE, uint32_t irqMask = 0, size_t len = 0);
 
     /*!
       \brief Reads the current IRQ status.
@@ -1039,6 +1143,46 @@ class LR11x0: public PhysicalLayer {
     RadioLibTime_t getTimeOnAir(size_t len) override;
 
     /*!
+      \brief Calculate the timeout value for this specific module / series (in number of symbols or units of time)
+      \param timeoutUs Timeout in microseconds to listen for
+      \returns Timeout value in a unit that is specific for the used module
+    */
+    RadioLibTime_t calculateRxTimeout(RadioLibTime_t timeoutUs) override;
+
+    /*!
+      \brief Create the flags that make up RxDone and RxTimeout used for receiving downlinks
+      \param irqFlags The flags for which IRQs must be triggered
+      \param irqMask Mask indicating which IRQ triggers a DIO
+      \returns \ref status_codes
+    */
+    int16_t irqRxDoneRxTimeout(uint32_t &irqFlags, uint32_t &irqMask) override;
+
+    /*!
+      \brief Check whether the IRQ bit for RxTimeout is set
+      \returns Whether RxTimeout IRQ is set
+    */
+    bool isRxTimeout() override;
+
+    /*!
+      \brief Get one truly random byte from RSSI noise.
+      \returns TRNG byte.
+    */
+    uint8_t randomByte();
+
+    /*!
+      \brief Set implicit header mode for future reception/transmission.
+      \param len Payload length in bytes.
+      \returns \ref status_codes
+    */
+    int16_t implicitHeader(size_t len);
+
+    /*!
+      \brief Set explicit header mode for future reception/transmission.
+      \returns \ref status_codes
+    */
+    int16_t explicitHeader();
+
+    /*!
       \brief Gets effective data rate for the last transmitted packet. The value is calculated only for payload bytes.
       \returns Effective data rate in bps.
     */
@@ -1053,6 +1197,69 @@ class LR11x0: public PhysicalLayer {
       \returns \ref status_codes
     */
     int16_t setLrFhssConfig(uint8_t bw, uint8_t cr, uint8_t hdrCount = 3, uint16_t hopSeed = 0x13A);
+    
+    /*!
+      \brief Start passive WiFi scan. BUSY pin will be de-activated when the scan is finished.
+      \param wifiType Type of WiFi (802.11) signals to scan, 'b', 'n', 'g' or '*' for all signals.
+      \param mode Scan acquisition mode, one of RADIOLIB_LR11X0_WIFI_ACQ_MODE_*.
+      The type of results available after the scan depends on this mode.
+      Defaults to RADIOLIB_LR11X0_WIFI_ACQ_MODE_FULL_BEACON, which provides the most information.
+      \param chanMask Bit mask of WiFi channels to scan, defaults to all channels.
+      More channels leads to longer overall scan duration.
+      \param numScans Number of scans to perform per each enabled channel. Defaults to 16 scans.
+      More scans leads to longer overall scan duration.
+      \param timeout Timeout of each scan in milliseconds. Defaults to 100 ms
+      Longer timeout leads to longer overall scan duration.
+      \returns \ref status_codes
+    */
+    int16_t startWifiScan(char wifiType, uint8_t mode = RADIOLIB_LR11X0_WIFI_ACQ_MODE_FULL_BEACON, uint16_t chanMask = RADIOLIB_LR11X0_WIFI_ALL_CHANNELS, uint8_t numScans = 16, uint16_t timeout = 100);
+
+    /*!
+      \brief Sets interrupt service routine to call when a WiFi scan is completed.
+      \param func ISR to call.
+    */
+    void setWiFiScanAction(void (*func)(void));
+
+    /*!
+      \brief Clears interrupt service routine to call when a WiFi scan is completed.
+    */
+    void clearWiFiScanAction();
+
+    /*!
+      \brief Get number of WiFi scan results after the scan is finished.
+      \param count Pointer to a variable that will hold the number of scan results.
+      \returns \ref status_codes
+    */
+    int16_t getWifiScanResultsCount(uint8_t* count);
+
+    /*!
+      \brief Retrieve passive WiFi scan result.
+      \param result Pointer to structure to hold the result data.
+      \param index Result index, starting from 0. The number of scan results can be retrieved by calling getWifiScanResultsCount.
+      \param brief Whether to only retrieve the results in brief format. If set to false, only information in LR11x0WifiResult_t
+      will be retrieved. If set to true, information in LR11x0WifiResultFull_t will be retrieved. In addition, if WiFi scan mode
+      was set to RADIOLIB_LR11X0_WIFI_ACQ_MODE_FULL_BEACON, all information in LR11x0WifiResultExtended_t will be retrieved.
+      \returns \ref status_codes
+    */
+    int16_t getWifiScanResult(LR11x0WifiResult_t* result, uint8_t index, bool brief = false);
+    
+    /*!
+      \brief Blocking WiFi scan method. Performs a full passive WiFi scan.
+      This method may block for several seconds!
+      \param wifiType Type of WiFi (802.11) signals to scan, 'b', 'n', 'g' or '*' for all signals.
+      \param count Pointer to a variable that will hold the number of scan results.
+      \param mode Scan acquisition mode, one of RADIOLIB_LR11X0_WIFI_ACQ_MODE_*.
+      The type of results available after the scan depends on this mode.
+      Defaults to RADIOLIB_LR11X0_WIFI_ACQ_MODE_FULL_BEACON, which provides the most information.
+      \param chanMask Bit mask of WiFi channels to scan, defaults to all channels.
+      More channels leads to longer overall scan duration.
+      \param numScans Number of scans to perform per each enabled channel. Defaults to 16 scans.
+      More scans leads to longer overall scan duration.
+      \param timeout Timeout of each scan in milliseconds. Defaults to 100 ms
+      Longer timeout leads to longer overall scan duration.
+      \returns \ref status_codes
+    */
+    int16_t wifiScan(uint8_t wifiType, uint8_t* count, uint8_t mode = RADIOLIB_LR11X0_WIFI_ACQ_MODE_FULL_BEACON, uint16_t chanMask = RADIOLIB_LR11X0_WIFI_ALL_CHANNELS, uint8_t numScans = 16, uint16_t timeout = 100);
 
 #if !RADIOLIB_GODMODE && !RADIOLIB_LOW_LEVEL
   protected:
@@ -1229,6 +1436,8 @@ class LR11x0: public PhysicalLayer {
 
     float dataRateMeasured = 0;
 
+    uint8_t wifiScanMode = 0;
+
     int16_t modSetup(float tcxoVoltage, uint8_t modem);
     static int16_t SPIparseStatus(uint8_t in);
     static int16_t SPIcheckStatus(Module* mod);
@@ -1236,6 +1445,7 @@ class LR11x0: public PhysicalLayer {
     int16_t config(uint8_t modem);
     int16_t setPacketMode(uint8_t mode, uint8_t len);
     int16_t startCad(uint8_t symbolNum, uint8_t detPeak, uint8_t detMin);
+    int16_t setHeaderType(uint8_t hdrType, size_t len = 0xFF);
 
     // common methods to avoid some copy-paste
     int16_t bleBeaconCommon(uint16_t cmd, uint8_t chan, uint8_t* payload, size_t len);
