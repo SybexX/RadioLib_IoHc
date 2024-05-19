@@ -452,7 +452,7 @@ class SX126x: public PhysicalLayer {
       \brief Default constructor.
       \param mod Instance of Module that will be used to communicate with the radio.
     */
-    SX126x(Module* mod); // cppcheck-suppress noExplicitConstructor
+    explicit SX126x(Module* mod);
 
     /*!
       \brief Whether the module has an XTAL (true) or TCXO (false). Defaults to false.
@@ -545,6 +545,13 @@ class SX126x: public PhysicalLayer {
       \returns \ref status_codes
     */
     int16_t scanChannel(uint8_t symbolNum, uint8_t detPeak, uint8_t detMin);
+
+    /*!
+      \brief Sets the module to sleep mode. To wake the device up, call standby().
+      Overload with warm start enabled for PhysicalLayer compatibility.
+      \returns \ref status_codes
+    */
+    int16_t sleep(); 
     
     /*!
       \brief Sets the module to sleep mode. To wake the device up, call standby().
@@ -552,7 +559,7 @@ class SX126x: public PhysicalLayer {
       or to false to discard current configuration ("cold start"). Defaults to true.
       \returns \ref status_codes
     */
-    int16_t sleep(bool retainConfig = true);
+    int16_t sleep(bool retainConfig);
 
     /*!
       \brief Sets the module to standby mode (overload for PhysicalLayer compatibility, uses 13 MHz RC oscillator).
@@ -972,7 +979,7 @@ class SX126x: public PhysicalLayer {
       \param irqMask Mask indicating which IRQ triggers a DIO
       \returns \ref status_codes
     */
-    int16_t irqRxDoneRxTimeout(uint32_t &irqFlags, uint32_t &irqMask);
+    int16_t irqRxDoneRxTimeout(uint32_t &irqFlags, uint32_t &irqMask) override;
 
     /*!
       \brief Check whether the IRQ bit for RxTimeout is set

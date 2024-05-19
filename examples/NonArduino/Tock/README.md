@@ -22,7 +22,9 @@ The RadioLib example can be built with:
 ```shell
 $ git clone https://github.com/jgromes/RadioLib.git
 $ cd RadioLib/examples/NonArduino/Tock/
-$ ./build.sh
+$ git clone https://github.com/tock/libtock-c.git
+$ cd libtock-c; git checkout dbee65a56d74b4bad166317f199e80b959f7c82c; cd ../
+$ LIBTOCK_C_DIRECTORY="$(pwd)/libtock-c" ./build.sh
 ```
 
 Then in the Tock repo you can flash the kernel and app with:

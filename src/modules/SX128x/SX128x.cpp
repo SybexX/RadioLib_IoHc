@@ -424,6 +424,10 @@ int16_t SX128x::scanChannel() {
   return(getChannelScanResult());
 }
 
+int16_t SX128x::sleep() {
+  return(SX128x::sleep(true));
+}
+
 int16_t SX128x::sleep(bool retainConfig) {
   // set RF switch (if present)
   this->mod->setRfSwitchState(Module::MODE_IDLE);
@@ -924,13 +928,13 @@ int16_t SX128x::setFrequencyDeviation(float freqDev) {
   }
 
   // update modulation parameters
-  uint8_t modIndex = (uint8_t)((8.0 * (newFreqDev / (float)this->bitRateKbps)) - 1.0);
-  if(modIndex > RADIOLIB_SX128X_BLE_GFSK_MOD_IND_4_00) {
+  uint8_t modInd = (uint8_t)((8.0 * (newFreqDev / (float)this->bitRateKbps)) - 1.0);
+  if(modInd > RADIOLIB_SX128X_BLE_GFSK_MOD_IND_4_00) {
     return(RADIOLIB_ERR_INVALID_MODULATION_PARAMETERS);
   }
 
   // update modulation parameters
-  this->modIndex = modIndex;
+  this->modIndex = modInd;
   return(setModulationParams(this->bitRate, this->modIndex, this->shaping));
 }
 
@@ -964,7 +968,7 @@ int16_t SX128x::setDataShaping(uint8_t sh) {
   }
 }
 
-int16_t SX128x::setSyncWord(uint8_t* syncWord, uint8_t len) {
+int16_t SX128x::setSyncWord(const uint8_t* syncWord, uint8_t len) {
   // check active modem
   uint8_t modem = getPacketType();
   if(!((modem == RADIOLIB_SX128X_PACKET_TYPE_GFSK) || (modem == RADIOLIB_SX128X_PACKET_TYPE_FLRC))) {

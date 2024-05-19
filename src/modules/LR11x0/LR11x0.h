@@ -84,6 +84,7 @@
 #define RADIOLIB_LR11X0_CMD_SET_GFSK_WHIT_PARAMS                (0x0225)
 #define RADIOLIB_LR11X0_CMD_SET_RX_BOOSTED                      (0x0227)
 #define RADIOLIB_LR11X0_CMD_SET_RANGING_PARAMETER               (0x0228)
+#define RADIOLIB_LR11X0_CMD_SET_RSSI_CALIBRATION                (0x0229)
 #define RADIOLIB_LR11X0_CMD_SET_LORA_SYNC_WORD                  (0x022B)
 #define RADIOLIB_LR11X0_CMD_LR_FHSS_BUILD_FRAME                 (0x022C)
 #define RADIOLIB_LR11X0_CMD_LR_FHSS_SET_SYNC_WORD               (0x022D)
@@ -111,6 +112,10 @@
 #define RADIOLIB_LR11X0_CMD_GNSS_SET_MODE                       (0x0408)
 #define RADIOLIB_LR11X0_CMD_GNSS_AUTONOMOUS                     (0x0409)
 #define RADIOLIB_LR11X0_CMD_GNSS_ASSISTED                       (0x040A)
+#define RADIOLIB_LR11X0_CMD_GNSS_SCAN                           (0x040B)
+#define RADIOLIB_LR11X0_CMD_GNSS_GET_RESULT_SIZE                (0x040C)
+#define RADIOLIB_LR11X0_CMD_GNSS_READ_RESULTS                   (0x040D)
+#define RADIOLIB_LR11X0_CMD_GNSS_ALMANAC_FULL_UPDATE            (0x040E)
 #define RADIOLIB_LR11X0_CMD_GNSS_SET_ASSISTANCE_POSITION        (0x0410)
 #define RADIOLIB_LR11X0_CMD_GNSS_READ_ASSISTANCE_POSITION       (0x0411)
 #define RADIOLIB_LR11X0_CMD_GNSS_PUSH_SOLVER_MSG                (0x0414)
@@ -119,10 +124,26 @@
 #define RADIOLIB_LR11X0_CMD_GNSS_GET_NB_SV_DETECTED             (0x0417)
 #define RADIOLIB_LR11X0_CMD_GNSS_GET_SV_DETECTED                (0x0418)
 #define RADIOLIB_LR11X0_CMD_GNSS_GET_CONSUMPTION                (0x0419)
-#define RADIOLIB_LR11X0_CMD_GNSS_GET_RESULT_SIZE                (0x040C)
-#define RADIOLIB_LR11X0_CMD_GNSS_READ_RESULTS                   (0x040D)
-#define RADIOLIB_LR11X0_CMD_GNSS_ALMANAC_FULL_UPDATE            (0x040E)
 #define RADIOLIB_LR11X0_CMD_GNSS_GET_SV_VISIBLE                 (0x041F)
+#define RADIOLIB_LR11X0_CMD_GNSS_READ_LAST_SCAN_MODE_LAUNCHED   (0x0426)
+#define RADIOLIB_LR11X0_CMD_GNSS_FETCH_TIME                     (0x0432)
+#define RADIOLIB_LR11X0_CMD_GNSS_READ_TIME                      (0x0434)
+#define RADIOLIB_LR11X0_CMD_GNSS_RESET_TIME                     (0x0435)
+#define RADIOLIB_LR11X0_CMD_GNSS_RESET_POSITION                 (0x0437)
+#define RADIOLIB_LR11X0_CMD_GNSS_READ_DEMOD_STATUS              (0x0439)
+#define RADIOLIB_LR11X0_CMD_GNSS_READ_CUMUL_TIMING              (0x044A)
+#define RADIOLIB_LR11X0_CMD_GNSS_SET_TIME                       (0x044B)
+#define RADIOLIB_LR11X0_CMD_GNSS_READ_DOPPLER_SOLVER_RES        (0x044F)
+#define RADIOLIB_LR11X0_CMD_GNSS_READ_DELAY_RESET_AP            (0x0453)
+#define RADIOLIB_LR11X0_CMD_GNSS_ALMANAC_UPDATE_FROM_SAT        (0x0455)
+#define RADIOLIB_LR11X0_CMD_GNSS_READ_ALMANAC_STATUS            (0x0457)
+#define RADIOLIB_LR11X0_CMD_GNSS_CONFIG_ALMANAC_UPDATE_PERIOD   (0x0463)
+#define RADIOLIB_LR11X0_CMD_GNSS_READ_ALMANAC_UPDATE_PERIOD     (0x0464)
+#define RADIOLIB_LR11X0_CMD_GNSS_CONFIG_DELAY_RESET_AP          (0x0465)
+#define RADIOLIB_LR11X0_CMD_GNSS_GET_SV_WARM_START              (0x0466)
+#define RADIOLIB_LR11X0_CMD_GNSS_READ_WN_ROLLOVER               (0x0467)
+#define RADIOLIB_LR11X0_CMD_GNSS_READ_WARM_START_STATUS         (0x0469)
+#define RADIOLIB_LR11X0_CMD_GNSS_WRITE_BIT_MASK_SAT_ACTIVATED   (0x0472)
 #define RADIOLIB_LR11X0_CMD_CRYPTO_SET_KEY                      (0x0502)
 #define RADIOLIB_LR11X0_CMD_CRYPTO_DERIVE_KEY                   (0x0503)
 #define RADIOLIB_LR11X0_CMD_CRYPTO_PROCESS_JOIN_ACCEPT          (0x0504)
@@ -147,6 +168,7 @@
 // LR11X0 register map
 #define RADIOLIB_LR11X0_REG_SF6_SX127X_COMPAT                   (0x00F20414)
 #define RADIOLIB_LR11X0_REG_LORA_HIGH_POWER_FIX                 (0x00F30054)
+// TODO add fix for br 600/1200 bps
 
 // LR11X0 SPI command variables
 
@@ -178,10 +200,10 @@
 #define RADIOLIB_LR11X0_SPI_MAX_READ_WRITE_LEN                  (256)           //  7     0     maximum length of read/write SPI payload in bytes
 
 // RADIOLIB_LR11X0_CMD_GET_VERSION
-#define RADIOLIB_LR11X0_HW_LR1110                               (0x01UL << 0)   //  7     0     HW version: LR1110
-#define RADIOLIB_LR11X0_HW_LR1120                               (0x02UL << 0)   //  7     0                 LR1120
-#define RADIOLIB_LR11X0_HW_LR1121                               (0x03UL << 0)   //  7     0                 LR1121
-#define RADIOLIB_LR11X0_HW_BOOT                                 (0xDFUL << 0)   //  7     0                 bootloader mode
+#define RADIOLIB_LR11X0_DEVICE_LR1110                           (0x01UL << 0)   //  7     0     HW device: LR1110
+#define RADIOLIB_LR11X0_DEVICE_LR1120                           (0x02UL << 0)   //  7     0                LR1120
+#define RADIOLIB_LR11X0_DEVICE_LR1121                           (0x03UL << 0)   //  7     0                LR1121
+#define RADIOLIB_LR11X0_DEVICE_BOOT                             (0xDFUL << 0)   //  7     0                bootloader mode
 
 // RADIOLIB_LR11X0_CMD_GET_ERRORS
 #define RADIOLIB_LR11X0_ERROR_STAT_LF_RC_CALIB_ERR              (0x01UL << 0)   //  15    0     error: low frequency RC not calibrated
@@ -640,6 +662,36 @@ struct LR11x0WifiResultExtended_t: public LR11x0WifiResultFull_t {
 };
 
 /*!
+  \struct LR11x0VersionInfo_t
+  \brief Structure to report information about versions of the LR11x0 hardware and firmware.
+*/
+struct LR11x0VersionInfo_t {
+  /*! \brief Hardware revision. */
+  uint8_t hardware;
+
+  /*! \brief Which device this is - one of RADIOLIB_LR11X0_DEVICE_* macros. */
+  uint8_t device;
+  
+  /*! \brief Major revision of the base firmware. */
+  uint8_t fwMajor;
+  
+  /*! \brief Minor revision of the base firmware. */
+  uint8_t fwMinor;
+
+  /*! \brief Major revision of the WiFi firmware. */
+  uint8_t fwMajorWiFi;
+  
+  /*! \brief Minor revision of the WiFi firmware. */
+  uint8_t fwMinorWiFi;
+
+  /*! \brief Revision of the GNSS firmware. */
+  uint8_t fwGNSS;
+  
+  /*! \brief Almanac revision of the GNSS firmware. */
+  uint8_t almanacGNSS;
+};
+
+/*!
   \class LR11x0
   \brief Base class for %LR11x0 series. All derived classes for %LR11x0 (e.g. LR1110 or LR1120) inherit from this base class.
   This class should not be instantiated directly from user code, only from its derived classes.
@@ -656,7 +708,7 @@ class LR11x0: public PhysicalLayer {
       \brief Default constructor.
       \param mod Instance of Module that will be used to communicate with the radio.
     */
-    LR11x0(Module* mod);
+    explicit LR11x0(Module* mod);
 
     /*!
       \brief Whether the module has an XTAL (true) or TCXO (false). Defaults to false.
@@ -766,7 +818,14 @@ class LR11x0: public PhysicalLayer {
       \returns \ref status_codes
     */
     int16_t standby(uint8_t mode, bool wakeup = true);
-    
+
+    /*!
+      \brief Sets the module to sleep mode. To wake the device up, call standby().
+      Overload with warm start enabled for PhysicalLayer compatibility.
+      \returns \ref status_codes
+    */
+    int16_t sleep();
+
     /*!
       \brief Sets the module to sleep mode. To wake the device up, call standby().
       \param retainConfig Set to true to retain configuration of the currently active modem ("warm start")
@@ -774,7 +833,7 @@ class LR11x0: public PhysicalLayer {
       \param sleepTime Sleep duration (enables automatic wakeup), in multiples of 30.52 us. Ignored if set to 0.
       \returns \ref status_codes
     */
-    int16_t sleep(bool retainConfig = true, uint32_t sleepTime = 0);
+    int16_t sleep(bool retainConfig, uint32_t sleepTime);
     
     // interrupt methods
 
@@ -793,23 +852,23 @@ class LR11x0: public PhysicalLayer {
       \brief Sets interrupt service routine to call when a packet is received.
       \param func ISR to call.
     */
-    void setPacketReceivedAction(void (*func)(void));
+    void setPacketReceivedAction(void (*func)(void)) override;
 
     /*!
       \brief Clears interrupt service routine to call when a packet is received.
     */
-    void clearPacketReceivedAction();
+    void clearPacketReceivedAction() override;
 
     /*!
       \brief Sets interrupt service routine to call when a packet is sent.
       \param func ISR to call.
     */
-    void setPacketSentAction(void (*func)(void));
+    void setPacketSentAction(void (*func)(void)) override;
 
     /*!
       \brief Clears interrupt service routine to call when a packet is sent.
     */
-    void clearPacketSentAction();
+    void clearPacketSentAction() override;
 
     /*!
       \brief Interrupt-driven binary transmit method.
@@ -833,7 +892,7 @@ class LR11x0: public PhysicalLayer {
 
       \returns \ref status_codes
     */
-    int16_t startReceive();
+    int16_t startReceive() override;
 
     /*!
       \brief Interrupt-driven receive method. IRQ1 will be activated when full packet is received.
@@ -895,7 +954,7 @@ class LR11x0: public PhysicalLayer {
       \param power Output power to be set in dBm, output PA is determined automatically preferring the low-power PA.
       \returns \ref status_codes
     */
-    int16_t setOutputPower(int8_t power);
+    int16_t setOutputPower(int8_t power) override;
 
     /*!
       \brief Sets output power. Allowed values are in range from -9 to 22 dBm (high-power PA) or -17 to 14 dBm (low-power PA).
@@ -961,7 +1020,7 @@ class LR11x0: public PhysicalLayer {
       \param br FSK bit rate to be set in kbps.
       \returns \ref status_codes
     */
-    int16_t setBitRate(float br);
+    int16_t setBitRate(float br) override;
 
     /*!
       \brief Sets GFSK frequency deviation. Allowed values range from 0.0 to 200.0 kHz.
@@ -1107,13 +1166,13 @@ class LR11x0: public PhysicalLayer {
       \brief Gets RSSI (Recorded Signal Strength Indicator) of the last received packet. Only available for LoRa or GFSK modem.
       \returns RSSI of the last received packet in dBm.
     */
-    float getRSSI();
+    float getRSSI() override;
 
     /*!
       \brief Gets SNR (Signal to Noise Ratio) of the last received packet. Only available for LoRa modem.
       \returns SNR of the last received packet in dB.
     */
-    float getSNR();
+    float getSNR() override;
 
     /*!
       \brief Gets frequency error of the latest received packet.
@@ -1167,7 +1226,7 @@ class LR11x0: public PhysicalLayer {
       \brief Get one truly random byte from RSSI noise.
       \returns TRNG byte.
     */
-    uint8_t randomByte();
+    uint8_t randomByte() override;
 
     /*!
       \brief Set implicit header mode for future reception/transmission.
@@ -1260,11 +1319,30 @@ class LR11x0: public PhysicalLayer {
       \returns \ref status_codes
     */
     int16_t wifiScan(uint8_t wifiType, uint8_t* count, uint8_t mode = RADIOLIB_LR11X0_WIFI_ACQ_MODE_FULL_BEACON, uint16_t chanMask = RADIOLIB_LR11X0_WIFI_ALL_CHANNELS, uint8_t numScans = 16, uint16_t timeout = 100);
-
+   
+    /*!
+      \brief Retrieve LR11x0 hardware, device and firmware version information.
+      \param info Pointer to LR11x0VersionInfo_t structure to populate.
+      \returns \ref status_codes
+    */
+    int16_t getVersionInfo(LR11x0VersionInfo_t* info);
+    
+    /*!
+      \brief Method to upload new firmware image to the device.
+      The device will be automatically erased, a new firmware will be uploaded,
+      written to flash and executed.
+      \param image Pointer to the image to upload.
+      \param size Size of the image in 32-bit words.
+      \param nonvolatile Set to true when the image is saved in non-volatile memory of the host processor,
+      or to false when the patch is in its RAM. Defaults to true.
+      \returns \ref status_codes
+    */
+    int16_t updateFirmware(const uint32_t* image, size_t size, bool nonvolatile = true);
+    
 #if !RADIOLIB_GODMODE && !RADIOLIB_LOW_LEVEL
   protected:
 #endif
-    Module* getMod();
+    Module* getMod() override;
 
     // LR11x0 SPI command implementations
     int16_t writeRegMem32(uint32_t addr, uint32_t* data, size_t len);
@@ -1281,7 +1359,7 @@ class LR11x0: public PhysicalLayer {
     int16_t calibrate(uint8_t params);
     int16_t setRegMode(uint8_t mode);
     int16_t calibImage(float freq1, float freq2);
-    int16_t setDioAsRfSwitch(uint8_t en, uint8_t stbyCfg, uint8_t rxCfg, uint8_t txCfg, uint8_t txHpCfg, uint8_t gnssCfg, uint8_t wifiCfg);
+    int16_t setDioAsRfSwitch(uint8_t en, uint8_t stbyCfg, uint8_t rxCfg, uint8_t txCfg, uint8_t txHpCfg, uint8_t txHfCfg, uint8_t gnssCfg, uint8_t wifiCfg);
     int16_t setDioIrqParams(uint32_t irq1, uint32_t irq2);
     int16_t clearIrq(uint32_t irq);
     int16_t configLfClock(uint8_t setup);
@@ -1292,7 +1370,7 @@ class LR11x0: public PhysicalLayer {
     int16_t setFs(void);
     int16_t getRandomNumber(uint32_t* rnd);
     int16_t eraseInfoPage(void);
-    int16_t writeInfoPage(uint16_t addr, uint32_t* data, size_t len);
+    int16_t writeInfoPage(uint16_t addr, const uint32_t* data, size_t len);
     int16_t readInfoPage(uint16_t addr, uint32_t* data, size_t len);
     int16_t getChipEui(uint8_t* eui);
     int16_t getSemtechJoinEui(uint8_t* eui);
@@ -1340,6 +1418,7 @@ class LR11x0: public PhysicalLayer {
     int16_t setGfskWhitParams(uint16_t seed);
     int16_t setRxBoosted(bool en);
     int16_t setRangingParameter(uint8_t symbolNum);
+    int16_t setRssiCalibration(int8_t* tune, int16_t gainOffset);
     int16_t setLoRaSyncWord(uint8_t sync);
     int16_t lrFhssBuildFrame(uint8_t hdrCount, uint8_t cr, uint8_t grid, bool hop, uint8_t bw, uint16_t hopSeq, int8_t devOffset, uint8_t* payload, size_t len);
     int16_t lrFhssSetSyncWord(uint32_t sync);
@@ -1382,6 +1461,26 @@ class LR11x0: public PhysicalLayer {
     int16_t gnssAlmanacFullUpdateHeader(uint16_t date, uint32_t globalCrc);
     int16_t gnssAlmanacFullUpdateSV(uint8_t svn, uint8_t* svnAlmanac);
     int16_t gnssGetSvVisible(uint32_t time, float lat, float lon, uint8_t constellation, uint8_t* nbSv);
+    int16_t gnssScan(uint8_t effort, uint8_t resMask, uint8_t nbSvMax);
+    int16_t gnssReadLastScanModeLaunched(uint8_t* lastScanMode);
+    int16_t gnssFetchTime(uint8_t effort, uint8_t opt);
+    int16_t gnssReadTime(uint8_t* err, uint32_t* time, uint32_t* nbUs, uint32_t* timeAccuracy);
+    int16_t gnssResetTime(void);
+    int16_t gnssResetPosition(void);
+    int16_t gnssReadDemodStatus(int8_t* status, uint8_t* info);
+    int16_t gnssReadCumulTiming(uint32_t* timing, uint8_t* constDemod);
+    int16_t gnssSetTime(uint32_t time, uint16_t accuracy);
+    int16_t gnssReadDopplerSolverRes(uint8_t* error, uint8_t* nbSvUsed, float* lat, float* lon, uint16_t* accuracy, uint16_t* xtal, float* latFilt, float* lonFilt, uint16_t* accuracyFilt, uint16_t* xtalFilt);
+    int16_t gnssReadDelayResetAP(uint32_t* delay);
+    int16_t gnssAlmanacUpdateFromSat(uint8_t effort, uint8_t bitMask);
+    int16_t gnssReadAlmanacStatus(uint8_t* status);
+    int16_t gnssConfigAlmanacUpdatePeriod(uint8_t bitMask, uint8_t svType, uint16_t period);
+    int16_t gnssReadAlmanacUpdatePeriod(uint8_t bitMask, uint8_t svType, uint16_t* period);
+    int16_t gnssConfigDelayResetAP(uint32_t delay);
+    int16_t gnssGetSvWarmStart(uint8_t bitMask, uint8_t* sv, uint8_t nbVisSat);
+    int16_t gnssReadWNRollover(uint8_t* status, uint8_t* rollover);
+    int16_t gnssReadWarmStartStatus(uint8_t bitMask, uint8_t* nbVisSat, uint32_t* timeElapsed);
+    int16_t gnssWriteBitMaskSatActivated(uint8_t bitMask, uint32_t* bitMaskActivated0, uint32_t* bitMaskActivated1);
 
     int16_t cryptoSetKey(uint8_t keyId, uint8_t* key);
     int16_t cryptoDeriveKey(uint8_t srcKeyId, uint8_t dstKeyId, uint8_t* key);
@@ -1395,11 +1494,11 @@ class LR11x0: public PhysicalLayer {
     int16_t cryptoRestoreFromFlash(void);
     int16_t cryptoSetParam(uint8_t id, uint32_t value);
     int16_t cryptoGetParam(uint8_t id, uint32_t* value);
-    int16_t cryptoCheckEncryptedFirmwareImage(uint32_t offset, uint32_t* data, size_t len);
+    int16_t cryptoCheckEncryptedFirmwareImage(uint32_t offset, uint32_t* data, size_t len, bool nonvolatile);
     int16_t cryptoCheckEncryptedFirmwareImageResult(bool* result);
 
     int16_t bootEraseFlash(void);
-    int16_t bootWriteFlashEncrypted(uint32_t offset, uint32_t* data, size_t len);
+    int16_t bootWriteFlashEncrypted(uint32_t offset, uint32_t* data, size_t len, bool nonvolatile);
     int16_t bootReboot(bool stay);
     int16_t bootGetPin(uint8_t* pin);
     int16_t bootGetChipEui(uint8_t* eui);
@@ -1410,7 +1509,7 @@ class LR11x0: public PhysicalLayer {
 #if !RADIOLIB_GODMODE
   protected:
 #endif
-    uint8_t chipType;
+    uint8_t chipType = 0;
 
 #if !RADIOLIB_GODMODE
   private:
@@ -1449,7 +1548,7 @@ class LR11x0: public PhysicalLayer {
 
     // common methods to avoid some copy-paste
     int16_t bleBeaconCommon(uint16_t cmd, uint8_t chan, uint8_t* payload, size_t len);
-    int16_t writeCommon(uint16_t cmd, uint32_t addrOffset, uint32_t* data, size_t len);
+    int16_t writeCommon(uint16_t cmd, uint32_t addrOffset, const uint32_t* data, size_t len, bool nonvolatile);
     int16_t cryptoCommon(uint16_t cmd, uint8_t keyId, uint8_t* dataIn, size_t len, uint8_t* dataOut);
 };
 
