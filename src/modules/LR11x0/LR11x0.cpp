@@ -44,6 +44,9 @@ int16_t LR11x0::begin(float bw, uint8_t sf, uint8_t cr, uint8_t syncWord, int8_t
   state = invertIQ(false);
   RADIOLIB_ASSERT(state);
 
+  state = setRegulatorLDO();
+  RADIOLIB_ASSERT(state);
+
   return(RADIOLIB_ERR_NONE);
 }
 
@@ -85,6 +88,9 @@ int16_t LR11x0::beginGFSK(float br, float freqDev, float rxBw, int8_t power, uin
   state = setCRC(2);
   RADIOLIB_ASSERT(state);
 
+  state = setRegulatorLDO();
+  RADIOLIB_ASSERT(state);
+
   return(RADIOLIB_ERR_NONE);
 }
 
@@ -101,6 +107,9 @@ int16_t LR11x0::beginLRFHSS(uint8_t bw, uint8_t cr, int8_t power, float tcxoVolt
   RADIOLIB_ASSERT(state);
 
   state = setSyncWord(0x12AD101B);
+  RADIOLIB_ASSERT(state);
+
+  state = setRegulatorLDO();
   RADIOLIB_ASSERT(state);
 
   // set fixed configuration
@@ -1363,6 +1372,41 @@ float LR11x0::getDataRate() const {
   return(this->dataRateMeasured);
 }
 
+int16_t LR11x0::setRegulatorLDO() {
+  return(this->setRegMode(RADIOLIB_LR11X0_REG_MODE_LDO));
+}
+
+int16_t LR11x0::setRegulatorDCDC() {
+  return(this->setRegMode(RADIOLIB_LR11X0_REG_MODE_DC_DC));
+}
+
+int16_t LR11x0::setRxBoostedGainMode(bool en) {
+  uint8_t buff[1] = { (uint8_t)en };
+  return(this->SPIcommand(RADIOLIB_LR11X0_CMD_SET_RX_BOOSTED, true, buff, sizeof(buff)));
+}
+
+void LR11x0::setRfSwitchTable(const uint32_t (&pins)[Module::RFSWITCH_MAX_PINS], const Module::RfSwitchMode_t table[]) {
+  // find which pins are used
+  uint8_t enable = 0;
+  for(size_t i = 0; i < Module::RFSWITCH_MAX_PINS; i++) {
+    if((pins[i] == RADIOLIB_NC) || (pins[i] > RADIOLIB_LR11X0_DIO10)) {
+      continue;
+    }
+    enable |= 1UL << pins[i];
+  }
+
+  // now get the configuration
+  uint8_t modes[7] = { 0 };
+  for(size_t i = 0; i < 7; i++) {
+    for(size_t j = 0; j < Module::RFSWITCH_MAX_PINS; j++) {
+      modes[i] |= (table[i].values[j] > 0) ? (1UL << j) : 0;
+    }
+  }
+
+  // set it
+  this->setDioAsRfSwitch(enable, modes[0], modes[1], modes[2], modes[3], modes[4], modes[5], modes[6]);
+}
+
 int16_t LR11x0::setLrFhssConfig(uint8_t bw, uint8_t cr, uint8_t hdrCount, uint16_t hopSeed) {
   // check active modem
   uint8_t type = RADIOLIB_LR11X0_PACKET_TYPE_NONE;
@@ -1573,7 +1617,7 @@ int16_t LR11x0::updateFirmware(const uint32_t* image, size_t size, bool nonvolat
   state = this->getVersion(NULL, &device, NULL, NULL);
   RADIOLIB_ASSERT(state);
   if(device != RADIOLIB_LR11X0_DEVICE_BOOT) {
-    RADIOLIB_DEBUG_BASIC_PRINTLN("Failed to put device to bootloader mode, %02x != %02x", device, RADIOLIB_LR11X0_DEVICE_BOOT);
+    RADIOLIB_DEBUG_BASIC_PRINTLN("Failed to put device to bootloader mode, %02x != %02x", (unsigned int)device, (unsigned int)RADIOLIB_LR11X0_DEVICE_BOOT);
     return(RADIOLIB_ERR_CHIP_NOT_FOUND);
   }
 
@@ -1611,7 +1655,7 @@ int16_t LR11x0::updateFirmware(const uint32_t* image, size_t size, bool nonvolat
   state = this->getVersion(NULL, &device, NULL, NULL);
   RADIOLIB_ASSERT(state);
   if(device == RADIOLIB_LR11X0_DEVICE_BOOT) {
-    RADIOLIB_DEBUG_BASIC_PRINTLN("Failed to kick device from bootloader mode, %02x == %02x", device, RADIOLIB_LR11X0_DEVICE_BOOT);
+    RADIOLIB_DEBUG_BASIC_PRINTLN("Failed to kick device from bootloader mode, %02x == %02x", (unsigned int)device, (unsigned int)RADIOLIB_LR11X0_DEVICE_BOOT);
     return(RADIOLIB_ERR_CHIP_NOT_FOUND);
   }
 
@@ -2476,18 +2520,13 @@ int16_t LR11x0::setGfskWhitParams(uint16_t seed) {
   return(this->SPIcommand(RADIOLIB_LR11X0_CMD_SET_GFSK_WHIT_PARAMS, true, buff, sizeof(buff)));
 }
 
-int16_t LR11x0::setRxBoosted(bool en) {
-  uint8_t buff[1] = { (uint8_t)en };
-  return(this->SPIcommand(RADIOLIB_LR11X0_CMD_SET_RX_BOOSTED, true, buff, sizeof(buff)));
-}
-
 int16_t LR11x0::setRangingParameter(uint8_t symbolNum) {
   // the first byte is reserved
   uint8_t buff[2] = { 0x00, symbolNum };
   return(this->SPIcommand(RADIOLIB_LR11X0_CMD_SET_RANGING_PARAMETER, true, buff, sizeof(buff)));
 }
 
-int16_t LR11x0::setRssiCalibration(int8_t* tune, int16_t gainOffset) {
+int16_t LR11x0::setRssiCalibration(const int8_t* tune, int16_t gainOffset) {
   uint8_t buff[11] = {
     (uint8_t)((tune[0] & 0x0F) | (uint8_t)(tune[1] & 0x0F) << 4),
     (uint8_t)((tune[2] & 0x0F) | (uint8_t)(tune[3] & 0x0F) << 4),

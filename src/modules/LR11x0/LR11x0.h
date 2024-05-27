@@ -240,6 +240,11 @@
 #define RADIOLIB_LR11X0_RFSW_DIO8_DISABLED                      (0x00UL << 3)   //  4     0                DIO8 disabled (default)
 #define RADIOLIB_LR11X0_RFSW_DIO10_ENABLED                      (0x01UL << 4)   //  4     0     RF switch: DIO10 enabled
 #define RADIOLIB_LR11X0_RFSW_DIO10_DISABLED                     (0x00UL << 4)   //  4     0                DIO10 disabled (default)
+#define RADIOLIB_LR11X0_DIO5                                    (0)
+#define RADIOLIB_LR11X0_DIO6                                    (1)
+#define RADIOLIB_LR11X0_DIO7                                    (2)
+#define RADIOLIB_LR11X0_DIO8                                    (3)
+#define RADIOLIB_LR11X0_DIO10                                   (4)
 
 // RADIOLIB_LR11X0_CMD_SET_DIO_IRQ_PARAMS
 #define RADIOLIB_LR11X0_IRQ_TX_DONE                             (0x01UL << 2)   //  31    0     interrupt: packet transmitted
@@ -711,6 +716,29 @@ class LR11x0: public PhysicalLayer {
     explicit LR11x0(Module* mod);
 
     /*!
+      \brief Custom operation modes for LR11x0.
+      Needed because LR11x0 has several modems (sub-GHz, 2.4 GHz etc.) in one package
+    */
+    enum OpMode_t {
+        /*! End of table marker, use \ref END_OF_MODE_TABLE constant instead */
+        MODE_END_OF_TABLE = Module::MODE_END_OF_TABLE,
+        /*! Standby/idle mode */
+        MODE_STBY = Module::MODE_IDLE,
+        /*! Receive mode */
+        MODE_RX = Module::MODE_RX,
+        /*! Low power transmission mode */
+        MODE_TX = Module::MODE_TX,
+        /*! High power transmission mode */
+        MODE_TX_HP,
+        /*! High frequency transmission mode */
+        MODE_TX_HF,
+        /*! GNSS scanning mode */
+        MODE_GNSS,
+        /*! WiFi scanning mode */
+        MODE_WIFI,
+    };
+
+    /*!
       \brief Whether the module has an XTAL (true) or TCXO (false). Defaults to false.
     */
     bool XTAL;
@@ -824,7 +852,7 @@ class LR11x0: public PhysicalLayer {
       Overload with warm start enabled for PhysicalLayer compatibility.
       \returns \ref status_codes
     */
-    int16_t sleep();
+    int16_t sleep() override;
 
     /*!
       \brief Sets the module to sleep mode. To wake the device up, call standby().
@@ -1248,6 +1276,28 @@ class LR11x0: public PhysicalLayer {
     float getDataRate() const;
 
     /*!
+      \brief Set regulator mode to LDO.
+      \returns \ref status_codes
+    */
+    int16_t setRegulatorLDO();
+
+    /*!
+      \brief Set regulator mode to DC-DC.
+      \returns \ref status_codes
+    */
+    int16_t setRegulatorDCDC();
+
+    /*!
+      \brief Enables or disables Rx Boosted Gain mode (additional Rx gain for increased power consumption).
+      \param en True for Rx Boosted Gain, false for Rx Power Saving Gain
+      \returns \ref status_codes
+    */
+    int16_t setRxBoostedGainMode(bool en);
+
+    /*! \copydoc Module::setRfSwitchTable */
+    void setRfSwitchTable(const uint32_t (&pins)[Module::RFSWITCH_MAX_PINS], const Module::RfSwitchMode_t table[]);
+
+    /*!
       \brief Sets LR-FHSS configuration.
       \param bw LR-FHSS bandwidth, one of RADIOLIB_LR11X0_LR_FHSS_BW_* values.
       \param cr LR-FHSS coding rate, one of RADIOLIB_LR11X0_LR_FHSS_CR_* values.
@@ -1416,9 +1466,8 @@ class LR11x0: public PhysicalLayer {
     int16_t setRangingTxRxDelay(uint32_t delay);
     int16_t setGfskCrcParams(uint32_t init, uint32_t poly);
     int16_t setGfskWhitParams(uint16_t seed);
-    int16_t setRxBoosted(bool en);
     int16_t setRangingParameter(uint8_t symbolNum);
-    int16_t setRssiCalibration(int8_t* tune, int16_t gainOffset);
+    int16_t setRssiCalibration(const int8_t* tune, int16_t gainOffset);
     int16_t setLoRaSyncWord(uint8_t sync);
     int16_t lrFhssBuildFrame(uint8_t hdrCount, uint8_t cr, uint8_t grid, bool hop, uint8_t bw, uint16_t hopSeq, int8_t devOffset, uint8_t* payload, size_t len);
     int16_t lrFhssSetSyncWord(uint32_t sync);

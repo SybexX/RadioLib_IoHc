@@ -424,11 +424,13 @@ int16_t CC1101::readData(uint8_t* data, size_t len) {
 
 int16_t CC1101::setFrequency(float freq) {
   // check allowed frequency range
-  if(!(((freq > 300.0) && (freq < 348.0)) ||
-       ((freq > 387.0) && (freq < 464.0)) ||
-       ((freq > 779.0) && (freq < 928.0)))) {
+  #if RADIOLIB_CHECK_PARAMS
+  if(!(((freq >= 300.0) && (freq <= 348.0)) ||
+       ((freq >= 387.0) && (freq <= 464.0)) ||
+       ((freq >= 779.0) && (freq <= 928.0)))) {
     return(RADIOLIB_ERR_INVALID_FREQUENCY);
   }
+  #endif
 
   // set mode to standby
   SPIsendCommand(RADIOLIB_CC1101_CMD_IDLE);
@@ -608,7 +610,7 @@ int16_t CC1101::checkOutputPower(int8_t power, int8_t* clipped, uint8_t* raw) {
 
   // if just a check occurs (and not requesting the raw power value), return now
   if(!raw) {
-    for(int i = 0; i < sizeof(allowedPwrs); i++) {
+    for(size_t i = 0; i < sizeof(allowedPwrs); i++) {
       if(allowedPwrs[i] == power) {
         return(RADIOLIB_ERR_NONE);
       }
