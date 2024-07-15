@@ -871,6 +871,20 @@ class LoRaWANNode {
     */
     bool TS009 = false;
 
+    /*!
+      \brief Rx window padding in milliseconds
+      according to the spec, the Rx window must be at least enough time to effectively detect a preamble
+      but we pad it a bit on both sides (start and end) to make sure it is wide enough
+      The larger this number the more power will be consumed! So be careful about changing it.
+      For debugging purposes 50 is a reasonable start, but for production devices it should
+      be as low as possible.
+      0 is a valid time.
+
+      500 is the **maximum** value, but it is not a good idea to go anywhere near that.
+      If you have to go above 50 you probably have a bug somewhere. Check your device timing.
+    */
+    RadioLibTime_t scanGuard = 10;
+
 #if !RADIOLIB_GODMODE
   private:
 #endif
@@ -1002,6 +1016,9 @@ class LoRaWANNode {
     // save the selected sub-band in case this must be restored in ADR control
     uint8_t subBand = 0;
 
+    // initalize the Nonces buffer after beginX() has been called
+    void createNonces();
+
     // this will reset the device credentials, so the device starts completely new
     void clearNonces();
 
@@ -1018,6 +1035,9 @@ class LoRaWANNode {
     // configure the common physical layer properties (preamble, sync word etc.)
     // channels must be configured separately by setupChannelsDyn()!
     int16_t setPhyProperties(uint8_t dir);
+
+    // print the available channels through debug
+    void printChannels();
 
     // setup uplink/downlink channel data rates and frequencies
     // for dynamic channels, there is a small set of predefined channels

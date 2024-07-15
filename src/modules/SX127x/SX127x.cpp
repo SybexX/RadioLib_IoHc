@@ -141,7 +141,7 @@ int16_t SX127x::beginFSK(uint8_t* chipVersions, uint8_t numVersions, float freqD
   return(state);
 }
 
-int16_t SX127x::transmit(uint8_t* data, size_t len, uint8_t addr) {
+int16_t SX127x::transmit(const uint8_t* data, size_t len, uint8_t addr) {
   // set mode to standby
   int16_t state = setMode(RADIOLIB_SX127X_STANDBY);
   RADIOLIB_ASSERT(state);
@@ -549,7 +549,7 @@ bool SX127x::fifoGet(volatile uint8_t* data, int totalLen, volatile int* rcvLen)
   return(false);
 }
 
-int16_t SX127x::startTransmit(uint8_t* data, size_t len, uint8_t addr) {
+int16_t SX127x::startTransmit(const uint8_t* data, size_t len, uint8_t addr) {
   // set mode to standby
   int16_t state = setMode(RADIOLIB_SX127X_STANDBY);
 
@@ -609,7 +609,7 @@ int16_t SX127x::startTransmit(uint8_t* data, size_t len, uint8_t addr) {
     packetLen = RADIOLIB_SX127X_FIFO_THRESH - 1;
     this->mod->SPIsetRegValue(RADIOLIB_SX127X_REG_FIFO_THRESH, RADIOLIB_SX127X_TX_START_FIFO_NOT_EMPTY, 7, 7);
   }
-  this->mod->SPIwriteRegisterBurst(RADIOLIB_SX127X_REG_FIFO, data, packetLen);
+  this->mod->SPIwriteRegisterBurst(RADIOLIB_SX127X_REG_FIFO, const_cast<uint8_t*>(data), packetLen);
 
   // set RF switch (if present)
   this->mod->setRfSwitchState(Module::MODE_TX);
@@ -1660,7 +1660,7 @@ uint8_t SX127x::getFHSSChannel(void) {
 void SX127x::clearFHSSInt(void) {
   int16_t modem = getActiveModem();
   if(modem == RADIOLIB_SX127X_LORA) {
-    this->mod->SPIwriteRegister(RADIOLIB_SX127X_REG_IRQ_FLAGS, getIRQFlags() | RADIOLIB_SX127X_CLEAR_IRQ_FLAG_FHSS_CHANGE_CHANNEL);
+    this->mod->SPIwriteRegister(RADIOLIB_SX127X_REG_IRQ_FLAGS, RADIOLIB_SX127X_CLEAR_IRQ_FLAG_FHSS_CHANGE_CHANNEL);
   } else if(modem == RADIOLIB_SX127X_FSK_OOK) {
     return; //These are not the interrupts you are looking for
   }
