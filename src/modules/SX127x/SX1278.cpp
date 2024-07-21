@@ -380,6 +380,7 @@ int16_t SX1278::setGain(uint8_t gain) {
     if(gain == 0) {
       // gain set to 0, enable AGC loop
       state |= mod->SPIsetRegValue(RADIOLIB_SX1278_REG_MODEM_CONFIG_3, RADIOLIB_SX1278_AGC_AUTO_ON, 2, 2);
+      state |= mod->SPIsetRegValue(RADIOLIB_SX127X_REG_LNA, RADIOLIB_SX127X_LNA_BOOST_ON, 1, 0);
     } else {
       state |= mod->SPIsetRegValue(RADIOLIB_SX1278_REG_MODEM_CONFIG_3, RADIOLIB_SX1278_AGC_AUTO_OFF, 2, 2);
       state |= mod->SPIsetRegValue(RADIOLIB_SX127X_REG_LNA, (gain << 5) | RADIOLIB_SX127X_LNA_BOOST_ON);
@@ -639,49 +640,49 @@ void SX1278::errataFix(bool rx) {
   uint8_t fixedRegs[3] = { 0x00, 0x00, 0x00 };
   float rxFreq = frequency;
   if(fabs(SX127x::bandwidth - 7.8) <= 0.001) {
-    fixedRegs[0] = 0b0000000;
+    fixedRegs[0] = 0b00000000;
     fixedRegs[1] = 0x48;
     fixedRegs[2] = 0x00;
     rxFreq += 0.00781;
   } else if(fabs(SX127x::bandwidth - 10.4) <= 0.001) {
-    fixedRegs[0] = 0b0000000;
+    fixedRegs[0] = 0b00000000;
     fixedRegs[1] = 0x44;
     fixedRegs[2] = 0x00;
     rxFreq += 0.01042;
   } else if(fabs(SX127x::bandwidth - 15.6) <= 0.001) {
-    fixedRegs[0] = 0b0000000;
+    fixedRegs[0] = 0b00000000;
     fixedRegs[1] = 0x44;
     fixedRegs[2] = 0x00;
     rxFreq += 0.01562;
   } else if(fabs(SX127x::bandwidth - 20.8) <= 0.001) {
-    fixedRegs[0] = 0b0000000;
+    fixedRegs[0] = 0b00000000;
     fixedRegs[1] = 0x44;
     fixedRegs[2] = 0x00;
     rxFreq += 0.02083;
   } else if(fabs(SX127x::bandwidth - 31.25) <= 0.001) {
-    fixedRegs[0] = 0b0000000;
+    fixedRegs[0] = 0b00000000;
     fixedRegs[1] = 0x44;
     fixedRegs[2] = 0x00;
     rxFreq += 0.03125;
   } else if(fabs(SX127x::bandwidth - 41.7) <= 0.001) {
-    fixedRegs[0] = 0b0000000;
+    fixedRegs[0] = 0b00000000;
     fixedRegs[1] = 0x44;
     fixedRegs[2] = 0x00;
     rxFreq += 0.04167;
   } else if(fabs(SX127x::bandwidth - 62.5) <= 0.001) {
-    fixedRegs[0] = 0b0000000;
+    fixedRegs[0] = 0b00000000;
     fixedRegs[1] = 0x40;
     fixedRegs[2] = 0x00;
   } else if(fabs(SX127x::bandwidth - 125.0) <= 0.001) {
-    fixedRegs[0] = 0b0000000;
+    fixedRegs[0] = 0b00000000;
     fixedRegs[1] = 0x40;
     fixedRegs[2] = 0x00;
   } else if(fabs(SX127x::bandwidth - 250.0) <= 0.001) {
-    fixedRegs[0] = 0b0000000;
+    fixedRegs[0] = 0b00000000;
     fixedRegs[1] = 0x40;
     fixedRegs[2] = 0x00;
   } else if(fabs(SX127x::bandwidth - 500.0) <= 0.001) {
-    fixedRegs[0] = 0b1000000;
+    fixedRegs[0] = 0b10000000;
     fixedRegs[1] = mod->SPIreadRegister(0x2F);
     fixedRegs[2] = mod->SPIreadRegister(0x30);
   } else {
