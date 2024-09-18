@@ -564,9 +564,9 @@
 #define RADIOLIB_ERR_CHECKSUM_MISMATCH                          (-1115)
 
 /*!
-  \brief No downlink was received - most likely none was sent from the server.
+  \brief No JoinAccept was received - check your keys, or otherwise likely a range issue!
 */
-#define RADIOLIB_LORAWAN_NO_DOWNLINK                            (-1116)
+#define RADIOLIB_ERR_NO_JOIN_ACCEPT                             (-1116)
 
 /*!
   \brief The LoRaWAN session was successfully re-activated.
@@ -581,17 +581,17 @@
 /*!
   \brief The supplied Nonces buffer is discarded as its activation information is invalid.
 */
-#define RADIOLIB_LORAWAN_NONCES_DISCARDED                       (-1119)
+#define RADIOLIB_ERR_NONCES_DISCARDED                           (-1119)
 
 /*!
   \brief The supplied Session buffer is discarded as it doesn't match the Nonces.
 */
-#define RADIOLIB_LORAWAN_SESSION_DISCARDED                       (-1120)
+#define RADIOLIB_ERR_SESSION_DISCARDED                          (-1120)
 
 /*!
   \brief The requested command is unavailable under the current LoRaWAN mode.
 */
-#define RADIOLIB_LORAWAN_INVALID_MODE                            (-1121)
+#define RADIOLIB_ERR_INVALID_MODE                               (-1121)
 
 // LR11x0-specific status codes
 
@@ -614,6 +614,12 @@
   \brief Type used for durations in RadioLib
 */
 typedef unsigned long RadioLibTime_t;
+
+/*!
+  \brief Type used for radio-agnostic IRQ flags. IRQ to enable corresponds to the bit index (RadioLibIrq_t).
+  For example, if bit 0 is set, the module will enable its RADIOLIB_IRQ_TX_DONE (if it is supported).
+*/
+typedef uint32_t RadioLibIrqFlags_t;
 
 /*!
   \}

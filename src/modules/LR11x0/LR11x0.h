@@ -844,12 +844,10 @@ class LR11x0: public PhysicalLayer {
 
     /*!
       \brief Performs scan for LoRa transmission in the current channel. Detects both preamble and payload.
-      \param symbolNum Number of symbols for CAD detection.
-      \param detPeak Peak value for CAD detection.
-      \param detMin Minimum value for CAD detection.
+      \param config CAD configuration structure.
       \returns \ref status_codes
     */
-    int16_t scanChannel(uint8_t symbolNum, uint8_t detPeak, uint8_t detMin);
+    int16_t scanChannel(const ChannelScanConfig_t &config) override;
 
     /*!
       \brief Sets the module to standby mode (overload for PhysicalLayer compatibility, uses 13 MHz RC oscillator).
@@ -979,14 +977,12 @@ class LR11x0: public PhysicalLayer {
     int16_t startChannelScan() override;
 
     /*!
-      \brief Interrupt-driven channel activity detection method. IRQ1 will be activated
+      \brief Interrupt-driven channel activity detection method. IRQ pin will be activated
       when LoRa preamble is detected, or upon timeout.
-      \param symbolNum Number of symbols for CAD detection. 
-      \param detPeak Peak value for CAD detection.
-      \param detMin Minimum value for CAD detection.
+      \param config CAD configuration structure.
       \returns \ref status_codes
     */
-    int16_t startChannelScan(uint8_t symbolNum, uint8_t detPeak, uint8_t detMin);
+    int16_t startChannelScan(const ChannelScanConfig_t &config) override;
 
     /*!
       \brief Read the channel scan result
@@ -1221,18 +1217,24 @@ class LR11x0: public PhysicalLayer {
     RadioLibTime_t calculateRxTimeout(RadioLibTime_t timeoutUs) override;
 
     /*!
-      \brief Create the flags that make up RxDone and RxTimeout used for receiving downlinks
-      \param irqFlags The flags for which IRQs must be triggered
-      \param irqMask Mask indicating which IRQ triggers a DIO
-      \returns \ref status_codes
+      \brief Read currently active IRQ flags.
+      \returns IRQ flags.
     */
-    int16_t irqRxDoneRxTimeout(uint32_t &irqFlags, uint32_t &irqMask) override;
+    uint32_t getIrqFlags() override;
 
     /*!
-      \brief Check whether a specific IRQ bit is set (e.g. RxTimeout, CadDone).
-      \returns Whether requested IRQ is set.
+      \brief Set interrupt on IRQ pin to be sent on a specific IRQ bit (e.g. RxTimeout, CadDone).
+      \param irq Module-specific IRQ flags.
+      \returns \ref status_codes
     */
-    int16_t checkIrq(uint8_t irq) override;
+    int16_t setIrqFlags(uint32_t irq) override;
+
+    /*!
+      \brief Clear interrupt on a specific IRQ bit (e.g. RxTimeout, CadDone).
+      \param irq Module-specific IRQ flags.
+      \returns \ref status_codes
+    */
+    int16_t clearIrqFlags(uint32_t irq) override;
 
     /*!
       \brief Get one truly random byte from RSSI noise.
@@ -1372,39 +1374,6 @@ class LR11x0: public PhysicalLayer {
       \returns \ref status_codes
     */
     int16_t updateFirmware(const uint32_t* image, size_t size, bool nonvolatile = true);
-    
-    /*!
-      \brief Method to check whether the device is capable of performing a GNSS scan.
-      CAUTION: Work in progress! Most data is returned via debug prints.
-      \returns \ref status_codes
-    */
-    int16_t isGnssScanCapable();
-
-    /*!
-      \brief Performs GNSS scan.
-      CAUTION: Work in progress! Most data is returned via debug prints.
-      \param resSize Pointer to a variable in which the result size will be saved.
-      \returns \ref status_codes
-    */
-    int16_t gnssScan(uint16_t* resSize);
-
-    /*!
-      \brief Get GNSS scan result.
-      CAUTION: Work in progress! Most data is returned via debug prints.
-      \param size Result size to read.
-      \returns \ref status_codes
-    */
-    int16_t getGnssScanResult(uint16_t size);
-    
-    /*!
-      \brief Get GNSS position.
-      CAUTION: Work in progress! Most data is returned via debug prints.
-      \param lat Pointer to a variable where latitude in degrees will be saved.
-      \param lon Pointer to a variable where longitude in degrees will be saved.
-      \param filtered Whether to save the filtered, or unfiltered value. Defaults to true (filtered).
-      \returns \ref status_codes
-    */
-    int16_t getGnssPosition(float* lat, float* lon, bool filtered = true);
     
 #if !RADIOLIB_GODMODE && !RADIOLIB_LOW_LEVEL
   protected:
@@ -1618,7 +1587,7 @@ class LR11x0: public PhysicalLayer {
     bool findChip(uint8_t ver);
     int16_t config(uint8_t modem);
     int16_t setPacketMode(uint8_t mode, uint8_t len);
-    int16_t startCad(uint8_t symbolNum, uint8_t detPeak, uint8_t detMin);
+    int16_t startCad(uint8_t symbolNum, uint8_t detPeak, uint8_t detMin, uint8_t exitMode, RadioLibTime_t timeout);
     int16_t setHeaderType(uint8_t hdrType, size_t len = 0xFF);
 
     // common methods to avoid some copy-paste

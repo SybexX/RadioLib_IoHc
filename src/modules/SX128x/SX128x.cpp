@@ -4,6 +4,16 @@
 
 SX128x::SX128x(Module* mod) : PhysicalLayer(RADIOLIB_SX128X_FREQUENCY_STEP_SIZE, RADIOLIB_SX128X_MAX_PACKET_LENGTH) {
   this->mod = mod;
+  this->irqMap[RADIOLIB_IRQ_TX_DONE] = RADIOLIB_SX128X_IRQ_TX_DONE;
+  this->irqMap[RADIOLIB_IRQ_RX_DONE] = RADIOLIB_SX128X_IRQ_RX_DONE;
+  this->irqMap[RADIOLIB_IRQ_PREAMBLE_DETECTED] = RADIOLIB_SX128X_IRQ_PREAMBLE_DETECTED;
+  this->irqMap[RADIOLIB_IRQ_SYNC_WORD_VALID] = RADIOLIB_SX128X_IRQ_SYNC_WORD_VALID;
+  this->irqMap[RADIOLIB_IRQ_HEADER_VALID] = RADIOLIB_SX128X_IRQ_HEADER_VALID;
+  this->irqMap[RADIOLIB_IRQ_HEADER_ERR] = RADIOLIB_SX128X_IRQ_HEADER_ERROR;
+  this->irqMap[RADIOLIB_IRQ_CRC_ERR] = RADIOLIB_SX128X_IRQ_CRC_ERROR;
+  this->irqMap[RADIOLIB_IRQ_CAD_DONE] = RADIOLIB_SX128X_IRQ_CAD_DONE;
+  this->irqMap[RADIOLIB_IRQ_CAD_DETECTED] = RADIOLIB_SX128X_IRQ_CAD_DETECTED;
+  this->irqMap[RADIOLIB_IRQ_TIMEOUT] = RADIOLIB_SX128X_IRQ_RX_TX_TIMEOUT;
 }
 
 int16_t SX128x::begin(float freq, float bw, uint8_t sf, uint8_t cr, uint8_t syncWord, int8_t pwr, uint16_t preambleLength) {
@@ -411,8 +421,23 @@ int16_t SX128x::receiveDirect() {
 }
 
 int16_t SX128x::scanChannel() {
+  ChannelScanConfig_t config = {
+    .cad = {
+      .symNum = RADIOLIB_SX128X_CAD_PARAM_DEFAULT,
+      .detPeak = 0,
+      .detMin = 0,
+      .exitMode = 0,
+      .timeout = 0,
+      .irqFlags = RADIOLIB_IRQ_CAD_DEFAULT_FLAGS,
+      .irqMask = RADIOLIB_IRQ_CAD_DEFAULT_MASK,
+    },
+  };
+  return(this->scanChannel(config));
+}
+
+int16_t SX128x::scanChannel(const ChannelScanConfig_t &config) {
   // set mode to CAD
-  int16_t state = startChannelScan();
+  int16_t state = startChannelScan(config);
   RADIOLIB_ASSERT(state);
 
   // wait for channel activity detected or timeout
@@ -558,10 +583,10 @@ int16_t SX128x::finishTransmit() {
 }
 
 int16_t SX128x::startReceive() {
-  return(this->startReceive(RADIOLIB_SX128X_RX_TIMEOUT_INF, RADIOLIB_SX128X_IRQ_RX_DEFAULT, RADIOLIB_SX128X_IRQ_RX_DONE, 0));
+  return(this->startReceive(RADIOLIB_SX128X_RX_TIMEOUT_INF, RADIOLIB_IRQ_RX_DEFAULT_FLAGS, RADIOLIB_IRQ_RX_DEFAULT_MASK, 0));
 }
 
-int16_t SX128x::startReceive(uint16_t timeout, uint32_t irqFlags, uint32_t irqMask, size_t len) {
+int16_t SX128x::startReceive(uint16_t timeout, RadioLibIrqFlags_t irqFlags, RadioLibIrqFlags_t irqMask, size_t len) {
   (void)len;
   
   // check active modem
@@ -571,10 +596,10 @@ int16_t SX128x::startReceive(uint16_t timeout, uint32_t irqFlags, uint32_t irqMa
 
   // set DIO mapping
   if(timeout != RADIOLIB_SX128X_RX_TIMEOUT_INF) {
-    irqMask |= RADIOLIB_SX128X_IRQ_RX_TX_TIMEOUT;
+    irqMask |= (1UL << RADIOLIB_IRQ_TIMEOUT);
   }
 
-  int16_t state = setDioIrqParams(irqFlags, irqMask);
+  int16_t state = setDioIrqParams(getIrqMapped(irqFlags), getIrqMapped(irqMask));
   RADIOLIB_ASSERT(state);
 
   // set buffer pointers
@@ -613,7 +638,8 @@ int16_t SX128x::readData(uint8_t* data, size_t len) {
   // check integrity CRC
   uint16_t irq = getIrqStatus();
   int16_t crcState = RADIOLIB_ERR_NONE;
-  if((irq & RADIOLIB_SX128X_IRQ_CRC_ERROR) || (irq & RADIOLIB_SX128X_IRQ_HEADER_ERROR)) {
+  // Report CRC mismatch when there's a payload CRC error, or a header error and no valid header (to avoid false alarm from previous packet)
+  if((irq & RADIOLIB_SX128X_IRQ_CRC_ERROR) || ((irq & RADIOLIB_SX128X_IRQ_HEADER_ERROR) && !(irq & RADIOLIB_SX128X_IRQ_HEADER_VALID))) {
     crcState = RADIOLIB_ERR_CRC_MISMATCH;
   }
 
@@ -638,36 +664,34 @@ int16_t SX128x::readData(uint8_t* data, size_t len) {
   return(state);
 }
 
-int16_t SX128x::checkIrq(uint8_t irq) {
-  uint16_t flags = getIrqStatus();
-  switch(irq) {
-    case RADIOLIB_IRQ_TX_DONE:
-      return(flags & RADIOLIB_SX128X_IRQ_TX_DONE);
-    case RADIOLIB_IRQ_RX_DONE:
-      return(flags & RADIOLIB_SX128X_IRQ_RX_DONE);
-    case RADIOLIB_IRQ_PREAMBLE_DETECTED:
-      return(flags & RADIOLIB_SX128X_IRQ_PREAMBLE_DETECTED);
-    case RADIOLIB_IRQ_SYNC_WORD_VALID:
-      return(flags & RADIOLIB_SX128X_IRQ_SYNC_WORD_VALID);
-    case RADIOLIB_IRQ_HEADER_VALID:
-      return(flags & RADIOLIB_SX128X_IRQ_HEADER_VALID);
-    case RADIOLIB_IRQ_HEADER_ERR:
-      return(flags & RADIOLIB_SX128X_IRQ_HEADER_ERROR);
-    case RADIOLIB_IRQ_CRC_ERR:
-      return(flags & RADIOLIB_SX128X_IRQ_CRC_ERROR);
-    case RADIOLIB_IRQ_CAD_DONE:
-      return(flags & RADIOLIB_SX128X_IRQ_CAD_DONE);
-    case RADIOLIB_IRQ_CAD_DETECTED:
-      return(flags & RADIOLIB_SX128X_IRQ_CAD_DETECTED);
-    case RADIOLIB_IRQ_TIMEOUT:
-      return(flags & RADIOLIB_SX128X_IRQ_RX_TX_TIMEOUT);
-    default:
-      return(RADIOLIB_ERR_UNSUPPORTED);
-  }
-  return(RADIOLIB_ERR_UNSUPPORTED);
+uint32_t SX128x::getIrqFlags() {
+  return((uint32_t)this->getIrqStatus());
+}
+
+int16_t SX128x::setIrqFlags(uint32_t irq) {
+  return(this->setDioIrqParams(irq, irq));
+}
+
+int16_t SX128x::clearIrqFlags(uint32_t irq) {
+  return(this->clearIrqStatus(irq));
 }
 
 int16_t SX128x::startChannelScan() {
+  ChannelScanConfig_t config = {
+    .cad = {
+      .symNum = RADIOLIB_SX128X_CAD_PARAM_DEFAULT,
+      .detPeak = 0,
+      .detMin = 0,
+      .exitMode = 0,
+      .timeout = 0,
+      .irqFlags = RADIOLIB_IRQ_CAD_DEFAULT_FLAGS,
+      .irqMask = RADIOLIB_IRQ_CAD_DEFAULT_MASK,
+    },
+  };
+  return(this->startChannelScan(config));
+}
+
+int16_t SX128x::startChannelScan(const ChannelScanConfig_t &config) {
   // check active modem
   if(getPacketType() != RADIOLIB_SX128X_PACKET_TYPE_LORA) {
     return(RADIOLIB_ERR_WRONG_MODEM);
@@ -678,7 +702,7 @@ int16_t SX128x::startChannelScan() {
   RADIOLIB_ASSERT(state);
 
   // set DIO pin mapping
-  state = setDioIrqParams(RADIOLIB_SX128X_IRQ_CAD_DETECTED | RADIOLIB_SX128X_IRQ_CAD_DONE, RADIOLIB_SX128X_IRQ_CAD_DETECTED | RADIOLIB_SX128X_IRQ_CAD_DONE);
+  state = setDioIrqParams(getIrqMapped(config.cad.irqFlags), getIrqMapped(config.cad.irqMask));
   RADIOLIB_ASSERT(state);
 
   // clear interrupt flags
@@ -689,7 +713,7 @@ int16_t SX128x::startChannelScan() {
   this->mod->setRfSwitchState(Module::MODE_RX);
 
   // set mode to CAD
-  return(setCad());
+  return(setCad(config.cad.symNum));
 }
 
 int16_t SX128x::getChannelScanResult() {
@@ -734,13 +758,13 @@ int16_t SX128x::setBandwidth(float bw) {
     return(RADIOLIB_ERR_WRONG_MODEM);
   }
 
-  if(fabs(bw - 203.125) <= 0.001) {
+  if(fabsf(bw - 203.125) <= 0.001) {
     this->bandwidth = RADIOLIB_SX128X_LORA_BW_203_125;
-  } else if(fabs(bw - 406.25) <= 0.001) {
+  } else if(fabsf(bw - 406.25) <= 0.001) {
     this->bandwidth = RADIOLIB_SX128X_LORA_BW_406_25;
-  } else if(fabs(bw - 812.5) <= 0.001) {
+  } else if(fabsf(bw - 812.5) <= 0.001) {
     this->bandwidth = RADIOLIB_SX128X_LORA_BW_812_50;
-  } else if(fabs(bw - 1625.0) <= 0.001) {
+  } else if(fabsf(bw - 1625.0) <= 0.001) {
     this->bandwidth = RADIOLIB_SX128X_LORA_BW_1625_00;
   } else {
     return(RADIOLIB_ERR_INVALID_BANDWIDTH);
@@ -1349,7 +1373,7 @@ RadioLibTime_t SX128x::getTimeOnAir(size_t len) {
       uint32_t N_symbolPreamble = (this->preambleLengthLoRa & 0x0F) * (uint32_t(1) << ((this->preambleLengthLoRa & 0xF0) >> 4));
 
       // calculate the number of symbols
-      N_symbol = (float)N_symbolPreamble + coeff1 + 8.0 + ceil(RADIOLIB_MAX((int16_t)(8 * len + N_bitCRC - coeff2 + N_symbolHeader), (int16_t)0) / (float)coeff3) * (float)(this->codingRateLoRa + 4);
+      N_symbol = (float)N_symbolPreamble + coeff1 + 8.0 + ceilf((float)RADIOLIB_MAX((int16_t)(8 * len + N_bitCRC - coeff2 + N_symbolHeader), (int16_t)0) / (float)coeff3) * (float)(this->codingRateLoRa + 4);
 
     } else {
       // long interleaving - abandon hope all ye who enter here
@@ -1464,7 +1488,12 @@ int16_t SX128x::setRx(uint16_t periodBaseCount, uint8_t periodBase) {
   return(this->mod->SPIwriteStream(RADIOLIB_SX128X_CMD_SET_RX, data, 3));
 }
 
-int16_t SX128x::setCad() {
+int16_t SX128x::setCad(uint8_t symbolNum) {
+  // configure parameters
+  int16_t state = this->mod->SPIwriteStream(RADIOLIB_SX128X_CMD_SET_CAD_PARAMS, &symbolNum, 1);
+  RADIOLIB_ASSERT(state);
+
+  // start CAD
   return(this->mod->SPIwriteStream(RADIOLIB_SX128X_CMD_SET_CAD, NULL, 0));
 }
 
