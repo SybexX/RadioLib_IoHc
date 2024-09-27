@@ -23,13 +23,13 @@ LR11x0::LR11x0(Module* mod) : PhysicalLayer(RADIOLIB_LR11X0_FREQUENCY_STEP_SIZE,
   this->irqMap[RADIOLIB_IRQ_TIMEOUT] = RADIOLIB_LR11X0_IRQ_TIMEOUT;
 }
 
-int16_t LR11x0::begin(float bw, uint8_t sf, uint8_t cr, uint8_t syncWord, uint16_t preambleLength, float tcxoVoltage) {
+int16_t LR11x0::begin(float bw, uint8_t sf, uint8_t cr, uint8_t syncWord, uint16_t preambleLength, float tcxoVoltage, bool high) {
   // set module properties and perform initial setup
   int16_t state = this->modSetup(tcxoVoltage, RADIOLIB_LR11X0_PACKET_TYPE_LORA);
   RADIOLIB_ASSERT(state);
 
   // configure publicly accessible settings
-  state = setBandwidth(bw);
+  state = setBandwidth(bw, high);
   RADIOLIB_ASSERT(state);
 
   state = setSpreadingFactor(sf);
@@ -216,11 +216,8 @@ int16_t LR11x0::receive(uint8_t* data, size_t len) {
     timeout = (RadioLibTime_t)(((maxLen * 8.0) / brBps) * 1000.0 * 5.0);
   
   } else if(modem == RADIOLIB_LR11X0_PACKET_TYPE_LR_FHSS) {
-    size_t maxLen = len;
-    if(len == 0) { 
-      maxLen = 0xFF;
-    }
-    timeout = (RadioLibTime_t)(((maxLen * 8.0) / (RADIOLIB_LR11X0_LR_FHSS_BIT_RATE)) * 1000.0 * 5.0);
+    // this modem cannot receive
+    return(RADIOLIB_ERR_WRONG_MODEM);
 
   } else {
     return(RADIOLIB_ERR_UNKNOWN);
@@ -288,7 +285,7 @@ int16_t LR11x0::receiveDirect() {
 }
 
 int16_t LR11x0::scanChannel() {
-  ChannelScanConfig_t config = {
+  ChannelScanConfig_t cfg = {
     .cad = {
       .symNum = RADIOLIB_LR11X0_CAD_PARAM_DEFAULT,
       .detPeak = RADIOLIB_LR11X0_CAD_PARAM_DEFAULT,
@@ -299,7 +296,7 @@ int16_t LR11x0::scanChannel() {
       .irqMask = RADIOLIB_IRQ_CAD_DEFAULT_MASK,
     },
   };
-  return(this->scanChannel(config));
+  return(this->scanChannel(cfg));
 }
 
 int16_t LR11x0::scanChannel(const ChannelScanConfig_t &config) {
@@ -472,8 +469,7 @@ int16_t LR11x0::startReceive(uint32_t timeout, uint32_t irqFlags, uint32_t irqMa
   state = getPacketType(&modem);
   RADIOLIB_ASSERT(state);
   if((modem != RADIOLIB_LR11X0_PACKET_TYPE_LORA) && 
-     (modem != RADIOLIB_LR11X0_PACKET_TYPE_GFSK) &&
-     (modem != RADIOLIB_LR11X0_PACKET_TYPE_LR_FHSS)) {
+     (modem != RADIOLIB_LR11X0_PACKET_TYPE_GFSK)) {
     return(RADIOLIB_ERR_WRONG_MODEM);
   }
 
@@ -521,8 +517,7 @@ int16_t LR11x0::readData(uint8_t* data, size_t len) {
   state = getPacketType(&modem);
   RADIOLIB_ASSERT(state);
   if((modem != RADIOLIB_LR11X0_PACKET_TYPE_LORA) && 
-     (modem != RADIOLIB_LR11X0_PACKET_TYPE_GFSK) &&
-     (modem != RADIOLIB_LR11X0_PACKET_TYPE_LR_FHSS)) {
+     (modem != RADIOLIB_LR11X0_PACKET_TYPE_GFSK)) {
     return(RADIOLIB_ERR_WRONG_MODEM);
   }
 
@@ -561,7 +556,7 @@ int16_t LR11x0::readData(uint8_t* data, size_t len) {
 }
 
 int16_t LR11x0::startChannelScan() {
-  ChannelScanConfig_t config = {
+  ChannelScanConfig_t cfg = {
     .cad = {
       .symNum = RADIOLIB_LR11X0_CAD_PARAM_DEFAULT,
       .detPeak = RADIOLIB_LR11X0_CAD_PARAM_DEFAULT,
@@ -572,7 +567,7 @@ int16_t LR11x0::startChannelScan() {
       .irqMask = RADIOLIB_IRQ_CAD_DEFAULT_MASK,
     },
   };
-  return(this->startChannelScan(config));
+  return(this->startChannelScan(cfg));
 }
 
 int16_t LR11x0::startChannelScan(const ChannelScanConfig_t &config) {
@@ -628,7 +623,7 @@ int16_t LR11x0::getChannelScanResult() {
   return(RADIOLIB_ERR_UNKNOWN);
 }
 
-int16_t LR11x0::setBandwidth(float bw) {
+int16_t LR11x0::setBandwidth(float bw, bool high) {
   // check active modem
   uint8_t type = RADIOLIB_LR11X0_PACKET_TYPE_NONE;
   int16_t state = getPacketType(&type);
@@ -638,25 +633,39 @@ int16_t LR11x0::setBandwidth(float bw) {
   }
 
   // ensure byte conversion doesn't overflow
-  RADIOLIB_CHECK_RANGE(bw, 0.0, 510.0, RADIOLIB_ERR_INVALID_BANDWIDTH);
+  if (high) {
+    RADIOLIB_CHECK_RANGE(bw, 203.125, 815.0, RADIOLIB_ERR_INVALID_BANDWIDTH);
 
-  // check allowed bandwidth values
-  uint8_t bw_div2 = bw / 2 + 0.01;
-  switch (bw_div2)  {
-    case 31: // 62.5:
-      this->bandwidth = RADIOLIB_LR11X0_LORA_BW_62_5;
-      break;
-    case 62: // 125.0:
-      this->bandwidth = RADIOLIB_LR11X0_LORA_BW_125_0;
-      break;
-    case 125: // 250.0
-      this->bandwidth = RADIOLIB_LR11X0_LORA_BW_250_0;
-      break;
-    case 250: // 500.0
-      this->bandwidth = RADIOLIB_LR11X0_LORA_BW_500_0;
-      break;
-    default:
+    if(fabsf(bw - 203.125) <= 0.001) {
+      this->bandwidth = RADIOLIB_LR11X0_LORA_BW_203_125;
+    } else if(fabsf(bw - 406.25) <= 0.001) {
+      this->bandwidth = RADIOLIB_LR11X0_LORA_BW_406_25;
+    } else if(fabsf(bw - 812.5) <= 0.001) {
+      this->bandwidth = RADIOLIB_LR11X0_LORA_BW_812_50;
+    } else {
       return(RADIOLIB_ERR_INVALID_BANDWIDTH);
+    }
+  } else {
+    RADIOLIB_CHECK_RANGE(bw, 0.0, 510.0, RADIOLIB_ERR_INVALID_BANDWIDTH);
+    
+    // check allowed bandwidth values
+    uint8_t bw_div2 = bw / 2 + 0.01;
+    switch (bw_div2)  {
+      case 31: // 62.5:
+        this->bandwidth = RADIOLIB_LR11X0_LORA_BW_62_5;
+        break;
+      case 62: // 125.0:
+        this->bandwidth = RADIOLIB_LR11X0_LORA_BW_125_0;
+        break;
+      case 125: // 250.0
+        this->bandwidth = RADIOLIB_LR11X0_LORA_BW_250_0;
+        break;
+      case 250: // 500.0
+        this->bandwidth = RADIOLIB_LR11X0_LORA_BW_500_0;
+        break;
+      default:
+        return(RADIOLIB_ERR_INVALID_BANDWIDTH);
+    }
   }
 
   // update modulation parameters
@@ -1419,6 +1428,33 @@ void LR11x0::setRfSwitchTable(const uint32_t (&pins)[Module::RFSWITCH_MAX_PINS],
   this->setDioAsRfSwitch(enable, modes[0], modes[1], modes[2], modes[3], modes[4], modes[5], modes[6]);
 }
 
+int16_t LR11x0::forceLDRO(bool enable) {
+  // check packet type
+  uint8_t type = RADIOLIB_LR11X0_PACKET_TYPE_NONE;
+  int16_t state = getPacketType(&type);
+  RADIOLIB_ASSERT(state);
+  if(type != RADIOLIB_LR11X0_PACKET_TYPE_LORA) {
+    return(RADIOLIB_ERR_WRONG_MODEM);
+  }
+
+  // update modulation parameters
+  this->ldroAuto = false;
+  this->ldrOptimize = (uint8_t)enable;
+  return(setModulationParamsLoRa(this->spreadingFactor, this->bandwidth, this->codingRate, this->ldrOptimize));
+}
+
+int16_t LR11x0::autoLDRO() {
+  uint8_t type = RADIOLIB_LR11X0_PACKET_TYPE_NONE;
+  int16_t state = getPacketType(&type);
+  RADIOLIB_ASSERT(state);
+  if(type != RADIOLIB_LR11X0_PACKET_TYPE_LORA) {
+    return(RADIOLIB_ERR_WRONG_MODEM);
+  }
+
+  this->ldroAuto = true;
+  return(RADIOLIB_ERR_NONE);
+}
+
 int16_t LR11x0::setLrFhssConfig(uint8_t bw, uint8_t cr, uint8_t hdrCount, uint16_t hopSeed) {
   // check active modem
   uint8_t type = RADIOLIB_LR11X0_PACKET_TYPE_NONE;
@@ -2126,7 +2162,8 @@ int16_t LR11x0::getTemp(float* temp) {
   // pass the replies
   if(temp) {
     uint16_t raw = ((uint16_t)(buff[0]) << 8) | (uint16_t)buff[1];
-    *temp = 25.0f - (1000.0f/1.7f)*(((float)raw/2047.0f)*1350.0f - 0.7295f);
+    raw = raw & 0x07FF; //According LR1121 datasheet we need [0..10] bits
+    *temp = 25.0f - (1000.0f/1.7f)*(((float)raw/2047.0f)*1.35f - 0.7295f); //According LR1121 datasheet 1.35
   }
 
   return(state);
@@ -2392,7 +2429,19 @@ int16_t LR11x0::setPacketType(uint8_t type) {
 }
 
 int16_t LR11x0::setModulationParamsLoRa(uint8_t sf, uint8_t bw, uint8_t cr, uint8_t ldro) {
-  uint8_t buff[4] = { sf, bw, cr, ldro };
+  // calculate symbol length and enable low data rate optimization, if auto-configuration is enabled
+  if(this->ldroAuto) {
+    float symbolLength = (float)(uint32_t(1) << this->spreadingFactor) / (float)this->bandwidthKhz;
+    if(symbolLength >= 16.0) {
+      this->ldrOptimize = RADIOLIB_LR11X0_LORA_LDRO_ENABLED;
+    } else {
+      this->ldrOptimize = RADIOLIB_LR11X0_LORA_LDRO_DISABLED;
+    }
+  } else {
+    this->ldrOptimize = ldro;
+  }
+
+  uint8_t buff[4] = { sf, bw, cr, this->ldrOptimize };
   return(this->SPIcommand(RADIOLIB_LR11X0_CMD_SET_MODULATION_PARAMS, true, buff, sizeof(buff)));
 }
 
