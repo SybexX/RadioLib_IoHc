@@ -461,7 +461,9 @@ int16_t SX128x::sleep(bool retainConfig) {
   if(!retainConfig) {
     sleepConfig = RADIOLIB_SX128X_SLEEP_DATA_BUFFER_FLUSH | RADIOLIB_SX128X_SLEEP_DATA_RAM_FLUSH;
   }
-  int16_t state = this->mod->SPIwriteStream(RADIOLIB_SX128X_CMD_SET_SLEEP, &sleepConfig, 1, false, false);
+  int16_t state = this->mod->SPIwriteStream(RADIOLIB_SX128X_CMD_SAVE_CONTEXT, 0, 1, false, false);
+  RADIOLIB_ASSERT(state);
+  state = this->mod->SPIwriteStream(RADIOLIB_SX128X_CMD_SET_SLEEP, &sleepConfig, 1, false, false);
 
   // wait for SX128x to safely enter sleep mode
   this->mod->hal->delay(1);
@@ -870,7 +872,7 @@ int16_t SX128x::setPreambleLength(uint32_t preambleLength) {
     uint8_t m = 1;
     uint32_t len = 0;
     for(; e <= 15; e++) {
-      for(; m <= 15; m++) {
+      for(m = 1; m <= 15; m++) {
         len = m * (uint32_t(1) << e);
         if(len >= preambleLength) {
           break;
@@ -900,6 +902,22 @@ int16_t SX128x::setPreambleLength(uint32_t preambleLength) {
   }
 
   return(RADIOLIB_ERR_WRONG_MODEM);
+}
+
+int16_t SX128x::setDataRate(DataRate_t dr) {
+  // check active modem
+  uint8_t modem = getPacketType();
+  int16_t state = RADIOLIB_ERR_NONE;
+  if (modem == RADIOLIB_SX128X_PACKET_TYPE_LORA) {
+      state = this->setBandwidth(dr.lora.bandwidth);
+      RADIOLIB_ASSERT(state);
+      state = this->setSpreadingFactor(dr.lora.spreadingFactor);
+      RADIOLIB_ASSERT(state);
+      state = this->setCodingRate(dr.lora.codingRate);
+  } else {
+      return(RADIOLIB_ERR_WRONG_MODEM);
+  }
+  return(state);
 }
 
 int16_t SX128x::setBitRate(float br) {
