@@ -1779,7 +1779,7 @@ int16_t LR11x0::isGnssScanCapable() {
     size_t len = sz > 32 ? 32 : sz/sizeof(uint32_t);
     state = this->readRegMem32(addr, buff, len);
     RADIOLIB_ASSERT(state);
-    Module::hexdump(NULL, (uint8_t*)buff, len*sizeof(uint32_t), addr);
+    RADIOLIB_DEBUG_HEXDUMP(NULL, (uint8_t*)buff, len*sizeof(uint32_t), addr);
     addr += len*sizeof(uint32_t);
     sz -= len*sizeof(uint32_t);
   }
@@ -1789,7 +1789,7 @@ int16_t LR11x0::isGnssScanCapable() {
     RADIOLIB_DEBUG_BASIC_PRINTLN("Almanac[%d]:", i);
     state = this->gnssAlmanacReadSV(i, almanac);
     RADIOLIB_ASSERT(state);
-    Module::hexdump(NULL, almanac, 22);
+    RADIOLIB_DEBUG_HEXDUMP(NULL, almanac, 22);
   }
 
   #endif
@@ -3601,7 +3601,9 @@ int16_t LR11x0::gnssWriteBitMaskSatActivated(uint8_t bitMask, uint32_t* bitMaskA
 void LR11x0::gnssAbort() {
   // send the abort signal (single NOP)
   this->mod->spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_CMD] = Module::BITS_8;
-  this->mod->SPIwriteStream(RADIOLIB_LR11X0_CMD_NOP, NULL, 0, false, false);
+  // we need to call the most basic overload of the SPI write method otherwise the call will be ambiguous
+  uint8_t cmd[2] = { 0, 0 };
+  this->mod->SPIwriteStream(cmd, 2, NULL, 0, false, false);
   this->mod->spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_CMD] = Module::BITS_16;
 
   // wait for at least 2.9 seconds as specified by the user manual

@@ -3,9 +3,6 @@
 
 #include "../TypeDef.h"
 #include "../Module.h"
-#if defined(RADIOLIB_BUILD_ARDUINO)
-#include "../ArduinoHal.h"
-#endif
 
 // BCH(31, 21) code constants
 #define RADIOLIB_PAGER_BCH_N                                    (31)
@@ -71,22 +68,12 @@ class RadioLibBCH {
 // the global singleton
 extern RadioLibBCH RadioLibBCHInstance;
 
-// macros to access bits in byte array, from http://www.mathcs.emory.edu/~cheung/Courses/255/Syllabus/1-C-intro/bit-array.html
-#define SET_BIT_IN_ARRAY_MSB(A, k)                              ( A[((k)/8)] |= (1 << ((k)%8)) )
-#define CLEAR_BIT_IN_ARRAY_MSB(A, k)                            ( A[((k)/8)] &= ~(1 << ((k)%8)) )
-#define TEST_BIT_IN_ARRAY_MSB(A, k)                             ( A[((k)/8)] & (1 << ((k)%8)) )
-#define GET_BIT_IN_ARRAY_MSB(A, k)                              ( (A[((k)/8)] & (1 << ((k)%8))) ? 1 : 0 )
-#define SET_BIT_IN_ARRAY_LSB(A, k)                              ( A[((k)/8)] |= (1 << (7 - ((k)%8))) )
-#define CLEAR_BIT_IN_ARRAY_LSB(A, k)                            ( A[((k)/8)] &= ~(1 << (7 - ((k)%8))) )
-#define TEST_BIT_IN_ARRAY_LSB(A, k)                             ( A[((k)/8)] & (1 << (7 - ((k)%8))) )
-#define GET_BIT_IN_ARRAY_LSB(A, k)                              ( (A[((k)/8)] & (1 << (7 - ((k)%8)))) ? 1 : 0 )
-
 /*!
   \class RadioLibConvCode
-  \brief Class to perform convolutional coding wtih variable rates.
+  \brief Class to perform convolutional coding with variable rates.
   Only 1/2 and 1/3 rate is currently supported.
 
-  Copnvolutional coder implementation in this class is adapted from Setmech's LR-FHSS demo:
+  Convolutional coder implementation in this class is adapted from Semtech's LR-FHSS demo:
   https://github.com/Lora-net/SWDM001/tree/master/lib/sx126x_driver
 
   Its SX126x driver is distributed under the Clear BSD License,

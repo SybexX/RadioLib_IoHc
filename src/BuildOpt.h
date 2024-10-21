@@ -82,13 +82,6 @@
 #endif
 
 /*
- * Enable pre-defined modules when using RadioShield, disabled by default.
- */
-#if !defined(RADIOLIB_RADIOSHIELD)
-  #define RADIOLIB_RADIOSHIELD  (0)
-#endif
-
-/*
  * Enable interrupt-based timing control
  * For details, see https://github.com/jgromes/RadioLib/wiki/Interrupt-Based-Timing
  */
@@ -142,7 +135,6 @@
  * RADIOLIB_NONVOLATILE_READ_BYTE - function/macro to read variables saved in program storage (usually Flash).
  * RADIOLIB_TYPE_ALIAS - construct to create an alias for a type, usually vai the `using` keyword.
  * RADIOLIB_TONE_UNSUPPORTED - some platforms do not have tone()/noTone(), which is required for AFSK.
- * RADIOLIB_BUILTIN_MODULE - some platforms have a builtin radio module on fixed pins, this macro is used to specify that pinout.
  *
  * In addition, some platforms may require RadioLib to disable specific drivers (such as ESP8266).
  *
@@ -320,10 +312,6 @@
   #define RADIOLIB_ARDUINOHAL_PIN_MODE_CAST           (PINMODE)
   #define RADIOLIB_ARDUINOHAL_INTERRUPT_MODE_CAST     (IrqModes)
 
-  // provide an easy access to the on-board module
-  #include "board-config.h"
-  #define RADIOLIB_BUILTIN_MODULE                      RADIO_NSS, RADIO_DIO_1, RADIO_RESET, RADIO_BUSY
-
   // CubeCell doesn't seem to define nullptr, let's do something like that now
   #define nullptr                                     NULL
 
@@ -473,10 +461,10 @@
 
 #if RADIOLIB_DEBUG
   #if defined(RADIOLIB_BUILD_ARDUINO)
-    #define RADIOLIB_DEBUG_PRINT(...) Module::serialPrintf(__VA_ARGS__)
-    #define RADIOLIB_DEBUG_PRINTLN(M, ...) Module::serialPrintf(M "\n", ##__VA_ARGS__)
-    #define RADIOLIB_DEBUG_PRINT_LVL(LEVEL, M, ...) Module::serialPrintf(LEVEL "" M, ##__VA_ARGS__)
-    #define RADIOLIB_DEBUG_PRINTLN_LVL(LEVEL, M, ...) Module::serialPrintf(LEVEL "" M "\n", ##__VA_ARGS__)
+    #define RADIOLIB_DEBUG_PRINT(...) rlb_printf(__VA_ARGS__)
+    #define RADIOLIB_DEBUG_PRINTLN(M, ...) rlb_printf(M "\n", ##__VA_ARGS__)
+    #define RADIOLIB_DEBUG_PRINT_LVL(LEVEL, M, ...) rlb_printf(LEVEL "" M, ##__VA_ARGS__)
+    #define RADIOLIB_DEBUG_PRINTLN_LVL(LEVEL, M, ...) rlb_printf(LEVEL "" M "\n", ##__VA_ARGS__)
 
     // some platforms do not support printf("%f"), so it has to be done this way
     #define RADIOLIB_DEBUG_PRINT_FLOAT(LEVEL, VAL, DECIMALS) RADIOLIB_DEBUG_PRINT(LEVEL); RADIOLIB_DEBUG_PORT.print(VAL, DECIMALS)
@@ -492,7 +480,7 @@
     #define RADIOLIB_DEBUG_PRINT_FLOAT(LEVEL, VAL, DECIMALS) RADIOLIB_DEBUG_PRINT(LEVEL "%.3f", VAL)
   #endif
 
-  #define RADIOLIB_DEBUG_HEXDUMP(LEVEL, ...) Module::hexdump(LEVEL, __VA_ARGS__)
+  #define RADIOLIB_DEBUG_HEXDUMP(LEVEL, ...) rlb_hexdump(LEVEL, __VA_ARGS__)
 #else
   #define RADIOLIB_DEBUG_PRINT(...) {}
   #define RADIOLIB_DEBUG_PRINTLN(...) {}
