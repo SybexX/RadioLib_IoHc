@@ -1123,6 +1123,13 @@ class SX126x: public PhysicalLayer {
     */
     int16_t invertIQ(bool enable) override;
 
+    /*!
+      \brief Get modem currently in use by the radio.
+      \param modem Pointer to a variable to save the retrieved configuration into.
+      \returns \ref status_codes
+    */
+    int16_t getModem(ModemType_t* modem) override;
+
     #if !RADIOLIB_EXCLUDE_DIRECT_RECEIVE
     /*!
       \brief Set interrupt service routine function to call when data bit is received in direct mode.
@@ -1226,7 +1233,7 @@ class SX126x: public PhysicalLayer {
     int16_t setModulationParams(uint8_t sf, uint8_t bw, uint8_t cr, uint8_t ldro);
     int16_t setModulationParamsFSK(uint32_t br, uint8_t sh, uint8_t rxBw, uint32_t freqDev);
     int16_t setPacketParams(uint16_t preambleLen, uint8_t crcType, uint8_t payloadLen, uint8_t hdrType, uint8_t invertIQ);
-    int16_t setPacketParamsFSK(uint16_t preambleLen, uint8_t crcType, uint8_t syncWordLen, uint8_t addrCmp, uint8_t whiten, uint8_t packType = RADIOLIB_SX126X_GFSK_PACKET_VARIABLE, uint8_t payloadLen = 0xFF, uint8_t preambleDetectorLen = RADIOLIB_SX126X_GFSK_PREAMBLE_DETECT_16);
+    int16_t setPacketParamsFSK(uint16_t preambleLen, uint8_t preambleDetectorLen, uint8_t crcType, uint8_t syncWordLen, uint8_t addrCmp, uint8_t whiten, uint8_t packType = RADIOLIB_SX126X_GFSK_PACKET_VARIABLE, uint8_t payloadLen = 0xFF);
     int16_t setBufferBaseAddress(uint8_t txBaseAddress = 0x00, uint8_t rxBaseAddress = 0x00);
     int16_t setRegulatorMode(uint8_t mode);
     uint8_t getStatus();
@@ -1260,7 +1267,7 @@ class SX126x: public PhysicalLayer {
     bool ldroAuto = true;
 
     uint32_t bitRate = 0, frequencyDev = 0;
-    uint8_t rxBandwidth = 0, pulseShape = 0, crcTypeFSK = 0, syncWordLength = 0, addrComp = 0, whitening = 0, packetType = 0;
+    uint8_t preambleDetLength = 0, rxBandwidth = 0, pulseShape = 0, crcTypeFSK = 0, syncWordLength = 0, addrComp = 0, whitening = 0, packetType = 0;
     uint16_t preambleLengthFSK = 0;
     float rxBandwidthKhz = 0;
     uint8_t nodeAddr = 0;

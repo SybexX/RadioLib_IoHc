@@ -15,11 +15,6 @@
 #define RADIOLIB_LORAWAN_CLASS_B                                (0x0B)
 #define RADIOLIB_LORAWAN_CLASS_C                                (0x0C)
 
-// modulation type
-#define RADIOLIB_LORAWAN_MODULATION_LORA                        (0)
-#define RADIOLIB_LORAWAN_MODULATION_GFSK                        (1)
-#define RADIOLIB_LORAWAN_MODULATION_LR_FHSS                     (2)
-
 // preamble format
 #define RADIOLIB_LORAWAN_LORA_SYNC_WORD                         (0x34)
 #define RADIOLIB_LORAWAN_LORA_PREAMBLE_LEN                      (8)
@@ -385,7 +380,7 @@ struct LoRaWANBand_t {
   /*! \brief Maximum allowed frequency (coded in 100 Hz steps) */
   uint32_t freqMax;
 
-  /*! \brief Array of allowed maximum payload lengths for each data rate (global maximum) */
+  /*! \brief Array of allowed maximum application payload lengths for each data rate (N-value) */
   uint8_t payloadLenMax[RADIOLIB_LORAWAN_CHANNEL_NUM_DATARATES];
 
   /*! \brief Maximum allowed output power in this band in dBm */
@@ -915,9 +910,6 @@ class LoRaWANNode {
     uint32_t confFCntUp = RADIOLIB_LORAWAN_FCNT_NONE;
     uint32_t confFCntDown = RADIOLIB_LORAWAN_FCNT_NONE;
     uint32_t adrFCnt = 0;
-
-    // modulation of the currently configured channel
-    uint8_t modulation = RADIOLIB_LORAWAN_MODULATION_LORA;
 
     // ADR is enabled by default
     bool adrEnabled = true;
