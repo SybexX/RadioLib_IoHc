@@ -2861,7 +2861,7 @@ int16_t LoRaWANNode::setPhyProperties(const LoRaWANChannel_t* chnl, uint8_t dir,
       syncWord[3] = (uint8_t)RADIOLIB_LORAWAN_LR_FHSS_SYNC_WORD;
       syncWordLen = 4;
       RADIOLIB_DEBUG_PROTOCOL_PRINTLN("LR-FHSS: BW = 0x%02x, CR = 0x%02x kHz, grid = %c", 
-                                    dr.lrfhss.bw, dr.lrfhss.cr, dr.lrFhss.narrowGrid ? 'N' : 'W');
+                                    dr.lrFhss.bw, dr.lrFhss.cr, dr.lrFhss.narrowGrid ? 'N' : 'W');
     } break;
 
     default:
@@ -2917,10 +2917,9 @@ void LoRaWANNode::getChannelPlanMask(uint64_t* chMaskGrp0123, uint32_t* chMaskGr
   *chMaskGrp0123 = 0;
   *chMaskGrp45 = 0;
 
-  uint8_t numCh = this->getAvailableChannels(NULL);
-
   // if there are any channels selected, create the mask from those channels
-  if(numCh > 0) {
+  // channels are always selected for dynamic bands and/or when a device is active
+  if(this->band->bandType == RADIOLIB_LORAWAN_BAND_DYNAMIC || this->isActivated()) {
     for(int i = 0; i < RADIOLIB_LORAWAN_NUM_AVAILABLE_CHANNELS; i++) {
       uint8_t idx = this->channelPlan[RADIOLIB_LORAWAN_UPLINK][i].idx;
       if(idx != RADIOLIB_LORAWAN_CHANNEL_INDEX_NONE) {
@@ -2931,12 +2930,6 @@ void LoRaWANNode::getChannelPlanMask(uint64_t* chMaskGrp0123, uint32_t* chMaskGr
         }
       }
     }
-    return;
-  }
-
-  // it should not happen that no channels are set for dynamic band
-  // but in that case, simply return
-  if(this->band->bandType == RADIOLIB_LORAWAN_BAND_DYNAMIC) {
     return;
 
   } else {    // bandType == RADIOLIB_LORAWAN_BAND_FIXED
@@ -3306,10 +3299,13 @@ int16_t LoRaWANNode::findDataRate(uint8_t dr, DataRate_t* dataRate) {
     return(state);
   }
 
+  ModemType_t modemNew;
+
   uint8_t dataRateBand = this->band->dataRates[dr];
 
   switch(dataRateBand & RADIOLIB_LORAWAN_DATA_RATE_MODEM) {
     case(RADIOLIB_LORAWAN_DATA_RATE_LORA):
+      modemNew = ModemType_t::LoRa;
       dataRate->lora.spreadingFactor = ((dataRateBand & RADIOLIB_LORAWAN_DATA_RATE_SF) >> 3) + 7;
       switch(dataRateBand & RADIOLIB_LORAWAN_DATA_RATE_BW) {
         case(RADIOLIB_LORAWAN_DATA_RATE_BW_125_KHZ):
@@ -3327,18 +3323,55 @@ int16_t LoRaWANNode::findDataRate(uint8_t dr, DataRate_t* dataRate) {
       dataRate->lora.codingRate = 5;
       break;
     case(RADIOLIB_LORAWAN_DATA_RATE_FSK):
+      modemNew = ModemType_t::FSK;
       dataRate->fsk.bitRate = 50;
       dataRate->fsk.freqDev = 25;
       break;
     case(RADIOLIB_LORAWAN_DATA_RATE_LR_FHSS):
-      // not yet supported by DataRate_t
-      return(RADIOLIB_ERR_UNSUPPORTED);
+      modemNew = ModemType_t::LRFHSS;
+      switch(dataRateBand & RADIOLIB_LORAWAN_DATA_RATE_BW) {
+        case(RADIOLIB_LORAWAN_DATA_RATE_BW_137_KHZ):
+          dataRate->lrFhss.bw = 0x02; // specific encoding
+          dataRate->lrFhss.narrowGrid = 1;
+          break;
+        case(RADIOLIB_LORAWAN_DATA_RATE_BW_336_KHZ):
+          dataRate->lrFhss.bw = 0x04; // specific encoding
+          dataRate->lrFhss.narrowGrid = 1;
+          break;
+        case(RADIOLIB_LORAWAN_DATA_RATE_BW_1523_KHZ):
+          dataRate->lrFhss.bw = 0x08; // specific encoding
+          dataRate->lrFhss.narrowGrid = 0;
+          break;
+        default:
+          return(RADIOLIB_ERR_UNSUPPORTED);
+      }
+      switch(dataRateBand & RADIOLIB_LORAWAN_DATA_RATE_CR) {
+        case(RADIOLIB_LORAWAN_DATA_RATE_CR_1_3):
+          dataRate->lrFhss.cr = 0x03;
+          break;
+        case(RADIOLIB_LORAWAN_DATA_RATE_CR_2_3):
+          dataRate->lrFhss.cr = 0x01;
+          break;
+        default:
+          return(RADIOLIB_ERR_UNSUPPORTED);
+      }
+      break;
     default:
       return(RADIOLIB_ERR_UNSUPPORTED);
   }
 
-  state = this->phyLayer->checkDataRate(*dataRate);
+  // get the currently configured modem from the radio
+  ModemType_t modemCurrent;
+  state = this->phyLayer->getModem(&modemCurrent);
+  RADIOLIB_ASSERT(state);
 
+  // if the required modem is different than the current one, change over
+  if(modemNew != modemCurrent) {
+    state = this->phyLayer->setModem(modemNew);
+    RADIOLIB_ASSERT(state);
+  }
+
+  state = this->phyLayer->checkDataRate(*dataRate);
   return(state);
 }
 

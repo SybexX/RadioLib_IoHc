@@ -129,7 +129,7 @@
  * Platform-specific configuration.
  *
  * RADIOLIB_PLATFORM - platform name, used in debugging to quickly check the correct platform is detected.
- * RADIOLIB_NC - alias for unused pin, usually the largest possible value of uint8_t.
+ * RADIOLIB_NC - alias for unused pin, usually the largest possible value of uint32_t.
  * RADIOLIB_DEFAULT_SPI - default SPIClass instance to use.
  * RADIOLIB_NONVOLATILE - macro to place variable into program storage (usually Flash).
  * RADIOLIB_NONVOLATILE_READ_BYTE - function/macro to read variables saved in program storage (usually Flash).
@@ -422,7 +422,7 @@
   // generic non-Arduino platform
   #define RADIOLIB_PLATFORM                           "Generic"
 
-  #define RADIOLIB_NC                                 (0xFF)
+  #define RADIOLIB_NC                                 (0xFFFFFFFF)
   #define RADIOLIB_NONVOLATILE
   #define RADIOLIB_NONVOLATILE_READ_BYTE(addr)        (*((uint8_t *)(void *)(addr)))
   #define RADIOLIB_NONVOLATILE_READ_DWORD(addr)       (*((uint32_t *)(void *)(addr)))
@@ -577,8 +577,8 @@
 
 // version definitions
 #define RADIOLIB_VERSION_MAJOR  7
-#define RADIOLIB_VERSION_MINOR  0
-#define RADIOLIB_VERSION_PATCH  2
+#define RADIOLIB_VERSION_MINOR  1
+#define RADIOLIB_VERSION_PATCH  0
 #define RADIOLIB_VERSION_EXTRA  0
 
 #define RADIOLIB_VERSION (((RADIOLIB_VERSION_MAJOR) << 24) | ((RADIOLIB_VERSION_MINOR) << 16) | ((RADIOLIB_VERSION_PATCH) << 8) | (RADIOLIB_VERSION_EXTRA))
