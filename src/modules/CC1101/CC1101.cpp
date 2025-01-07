@@ -19,13 +19,7 @@ int16_t CC1101::beginFSK4(float freq, float br, float freqDev, float rxBw, int8_
 }
 
 void CC1101::reset() {
-  // this is the manual power-on-reset sequence
-  this->mod->hal->digitalWrite(this->mod->getCs(), this->mod->hal->GpioLevelLow);
-  this->mod->hal->delayMicroseconds(5);
-  this->mod->hal->digitalWrite(this->mod->getCs(), this->mod->hal->GpioLevelHigh);
-  this->mod->hal->delayMicroseconds(40);
-  this->mod->hal->digitalWrite(this->mod->getCs(), this->mod->hal->GpioLevelLow);
-  this->mod->hal->delay(10);
+  // just send the command, the reset sequence as described in datasheet seems unnecessary in our usage
   SPIsendCommand(RADIOLIB_CC1101_CMD_RESET);
 }
 
@@ -1166,21 +1160,7 @@ void CC1101::SPIwriteRegisterBurst(uint8_t reg, uint8_t* data, size_t len) {
 }
 
 void CC1101::SPIsendCommand(uint8_t cmd) {
-  // pull NSS low
-  this->mod->hal->digitalWrite(this->mod->getCs(), this->mod->hal->GpioLevelLow);
-
-  // start transfer
-  this->mod->hal->spiBeginTransaction();
-
-  // send the command byte
-  uint8_t status = 0;
-  this->mod->hal->spiTransfer(&cmd, 1, &status);
-
-  // stop transfer
-  this->mod->hal->spiEndTransaction();
-  this->mod->hal->digitalWrite(this->mod->getCs(), this->mod->hal->GpioLevelHigh);
-  RADIOLIB_DEBUG_SPI_PRINTLN("CMD\tW\t%02X\t%02X", cmd, status);
-  (void)status;
+  this->mod->SPItransferStream(&cmd, 1, true, NULL, NULL, 0, false);
 }
 
 #endif

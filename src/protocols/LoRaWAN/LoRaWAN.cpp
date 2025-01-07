@@ -12,8 +12,6 @@ LoRaWANNode::LoRaWANNode(PhysicalLayer* phy, const LoRaWANBand_t* band, uint8_t 
   this->channels[RADIOLIB_LORAWAN_DIR_RX2] = this->band->rx2;
   this->txPowerMax = this->band->powerMax;
   this->subBand = subBand;
-  this->dwellTimeEnabledUp = this->dwellTimeUp != 0;
-  this->dwellTimeEnabledDn = this->dwellTimeDn != 0;
   memset(this->channelPlan, 0, sizeof(this->channelPlan));
 }
 
@@ -292,7 +290,8 @@ void LoRaWANNode::clearSession() {
   this->confFCntDown = RADIOLIB_LORAWAN_FCNT_NONE;
   this->adrFCnt = 0;
 
-  // reset number of retransmissions from ADR
+  // reset ADR state
+  this->txPowerSteps = 0;
   this->nbTrans = 1;
 
   // clear CSMA settings
@@ -307,7 +306,7 @@ void LoRaWANNode::createSession(uint16_t lwMode, uint8_t initialDr) {
 
   // setup JoinRequest uplink/downlink frequencies and datarates
   if(this->band->bandType == RADIOLIB_LORAWAN_BAND_DYNAMIC) {
-    this->selectChannelPlanDyn(true);
+    this->selectChannelPlanDyn();
   } else {
     this->selectChannelPlanFix();
   }
@@ -761,7 +760,7 @@ int16_t LoRaWANNode::processJoinAccept(LoRaWANJoinEvent_t *joinEvent) {
   
   // in case of dynamic band, reset the channels to clear JoinRequest-specific channels
   if(this->band->bandType == RADIOLIB_LORAWAN_BAND_DYNAMIC) {
-    this->selectChannelPlanDyn(false);
+    this->selectChannelPlanDyn();
   }
 
   uint8_t cOcts[5];
@@ -906,7 +905,7 @@ int16_t LoRaWANNode::activateOTAA(uint8_t joinDr, LoRaWANJoinEvent_t *joinEvent)
   RADIOLIB_ASSERT(state);
 
   // calculate JoinRequest time-on-air in milliseconds
-  if(this->dwellTimeEnabledUp) {
+  if(this->dwellTimeUp) {
     RadioLibTime_t toa = this->phyLayer->getTimeOnAir(RADIOLIB_LORAWAN_JOIN_REQUEST_LEN) / 1000;
     if(toa > this->dwellTimeUp) {
       RADIOLIB_DEBUG_PROTOCOL_PRINTLN("Dwell time exceeded: ToA = %lu, max = %d", (unsigned long)toa, this->dwellTimeUp);
@@ -1131,15 +1130,26 @@ void LoRaWANNode::adrBackoff() {
     }
   }
 
-  // try to decrease the datarate
+  // if datarate can be decreased, try it
   if(this->channels[RADIOLIB_LORAWAN_UPLINK].dr > 0) {
-    if(this->setDatarate(this->channels[RADIOLIB_LORAWAN_UPLINK].dr - 1) == RADIOLIB_ERR_NONE) {
-      return;
+    uint8_t oldDr = this->channels[RADIOLIB_LORAWAN_UPLINK].dr;
+
+    if(this->setDatarate(oldDr - 1) == RADIOLIB_ERR_NONE) {
+      // if there is no dwell time limit, a lower datarate is OK
+      if(!this->dwellTimeUp) {
+        return;
+      }
+      // if there is a dwell time limit, check if this datarate allows an empty uplink
+      if(this->phyLayer->getTimeOnAir(13) / 1000 < this->dwellTimeUp) { 
+        return;
+      }
+      // if the Time on Air of an empty uplink exceeded the dwell time, revert
+      this->setDatarate(oldDr);
     }
   }
 
   if(this->band->bandType == RADIOLIB_LORAWAN_BAND_DYNAMIC) {
-    this->selectChannelPlanDyn(false);      // revert to default frequencies
+    this->selectChannelPlanDyn();           // revert to default frequencies
   } else {
     this->selectChannelPlanFix();           // go back to default selected subband
   }
@@ -1167,10 +1177,18 @@ void LoRaWANNode::composeUplink(const uint8_t* in, uint8_t lenIn, uint8_t* out, 
     out[RADIOLIB_LORAWAN_FHDR_FCTRL_POS] |= RADIOLIB_LORAWAN_FCTRL_ADR_ENABLED;
     
     // AdrAckReq is set if no downlink has been received for >=Limit uplinks
-    // but it is unset once backoff has been completed (which is internally denoted by adrFCnt == FCNT_NONE)
     uint32_t adrLimit = 0x01 << this->adrLimitExp;
-    if(this->adrFCnt != RADIOLIB_LORAWAN_FCNT_NONE && (this->fCntUp - this->adrFCnt) >= adrLimit) {
-      out[RADIOLIB_LORAWAN_FHDR_FCTRL_POS] |= RADIOLIB_LORAWAN_FCTRL_ADR_ACK_REQ;
+    if(this->rev == 1) {
+      // AdrAckReq is unset once backoff has been completed 
+      // (which is internally denoted by adrFCnt == FCNT_NONE)
+      if(this->adrFCnt != RADIOLIB_LORAWAN_FCNT_NONE && (this->fCntUp - this->adrFCnt) >= adrLimit) {
+        out[RADIOLIB_LORAWAN_FHDR_FCTRL_POS] |= RADIOLIB_LORAWAN_FCTRL_ADR_ACK_REQ;
+      }
+    } else {  // rev == 0
+      // AdrAckReq is always set, also when backoff has been completed
+      if(this->adrFCnt == RADIOLIB_LORAWAN_FCNT_NONE || (this->fCntUp - this->adrFCnt) >= adrLimit) {
+        out[RADIOLIB_LORAWAN_FHDR_FCTRL_POS] |= RADIOLIB_LORAWAN_FCTRL_ADR_ACK_REQ;
+      }
     }
   }
   
@@ -1553,7 +1571,7 @@ int16_t LoRaWANNode::parseDownlink(uint8_t* data, size_t* len, LoRaWANEvent_t* e
     #if !RADIOLIB_STATIC_ONLY
       delete[] downlinkMsg;
     #endif
-    return(RADIOLIB_ERR_INVALID_PORT);
+    return(RADIOLIB_ERR_DOWNLINK_MALFORMED);
   }
   
   // get the frame counter
@@ -1633,8 +1651,8 @@ int16_t LoRaWANNode::parseDownlink(uint8_t* data, size_t* len, LoRaWANEvent_t* e
     isConfirmedDown = true;
   }
 
-  // a downlink was received, so reset the ADR counter to the last uplink's fCnt
-  this->adrFCnt = this->getFCntUp();
+  // a downlink was received, so restart the ADR counter with the next uplink
+  this->adrFCnt = this->getFCntUp() + 1;
   
   // if this downlink is on FPort 0, the FOptsLen is the length of the payload
   // in any other case, the payload (length) is user accessible
@@ -1702,15 +1720,24 @@ int16_t LoRaWANNode::parseDownlink(uint8_t* data, size_t* len, LoRaWANEvent_t* e
 
   while(procLen < fOptsLen) {
     cid = *mPtr;      // MAC id is the first byte
+
+    // fetch length of MAC downlink payload
     state = this->getMacLen(cid, &fLen, RADIOLIB_LORAWAN_DOWNLINK, true);
-    RADIOLIB_ASSERT(state);
+    if(state != RADIOLIB_ERR_NONE) {
+      RADIOLIB_DEBUG_PROTOCOL_PRINTLN("WARNING: Unknown MAC CID %02x", cid);
+      RADIOLIB_DEBUG_PROTOCOL_PRINTLN("WARNING: Skipping remaining MAC commands");
+      break;
+    }
+
+    // already fetch length of MAC answer payload (if any)
     uint8_t fLenRe = 0;
-    state = this->getMacLen(cid, &fLenRe, RADIOLIB_LORAWAN_UPLINK, true);
-    RADIOLIB_ASSERT(state);
+    (void)this->getMacLen(cid, &fLenRe, RADIOLIB_LORAWAN_UPLINK, true);
+    // don't care about return value: the previous getMacLen() would have failed anyway
 
     if(procLen + fLen > fOptsLen) {
-      RADIOLIB_DEBUG_PROTOCOL_PRINTLN("Incomplete MAC command %02x (%d bytes, expected %d)", cid, fOptsLen, fLen);
-      return(RADIOLIB_ERR_INVALID_CID);
+      RADIOLIB_DEBUG_PROTOCOL_PRINTLN("WARNING: Incomplete MAC command %02x (%d bytes, expected %d)", cid, fOptsLen - procLen, fLen);
+      RADIOLIB_DEBUG_PROTOCOL_PRINTLN("WARNING: Skipping remaining MAC commands");
+      break;
     }
 
     bool reply = false;
@@ -1921,7 +1948,6 @@ bool LoRaWANNode::execMacCommand(uint8_t cid, uint8_t* optIn, uint8_t lenIn, uin
       // only acknowledge if the radio is able to operate at or below the requested power level
       if(state == RADIOLIB_ERR_NONE || (state == RADIOLIB_ERR_INVALID_OUTPUT_POWER && powerActual < power)) {
         pwrAck = 1;
-        this->txPowerSteps = macTxSteps;
       } else {
         RADIOLIB_DEBUG_PROTOCOL_PRINTLN("ADR failed to configure Tx power %d, code %d!", power, state);
       }
@@ -1933,10 +1959,17 @@ bool LoRaWANNode::execMacCommand(uint8_t cid, uint8_t* optIn, uint8_t lenIn, uin
 
       // if ACK not completely successful, revert and stop
       if(optOut[0] != 0x07) {
-        this->applyChannelMask(chMaskGrp0123, chMaskGrp45);
-        this->setAvailableChannels(chMaskActive);
+        // according to paragraph 4.3.1.1, if ADR is disabled, 
+        // the ADR channel mask must be accepted even if drAck/pwrAck fails.
+        // therefore, only revert the channel mask if ADR is enabled.
+        if(this->adrEnabled) {
+          this->applyChannelMask(chMaskGrp0123, chMaskGrp45);
+          this->setAvailableChannels(chMaskActive);
+        }
+        // revert datarate
         this->channels[RADIOLIB_LORAWAN_UPLINK].dr = currentDr;
-        // Tx power was not modified
+        // Tx power was not actually modified
+
         return(true);
       }
 
@@ -2203,10 +2236,7 @@ bool LoRaWANNode::execMacCommand(uint8_t cid, uint8_t* optIn, uint8_t lenIn, uin
       this->txPowerMax = eirpEncoding[maxEirpRaw];
       RADIOLIB_DEBUG_PROTOCOL_PRINTLN("TxParamSetupReq: dlDwell = %d, ulDwell = %d, maxEirp = %d dBm", dlDwell, ulDwell, eirpEncoding[maxEirpRaw]);
 
-      this->dwellTimeEnabledUp = ulDwell ? true : false;
       this->dwellTimeUp = ulDwell ? RADIOLIB_LORAWAN_DWELL_TIME : 0;
-
-      this->dwellTimeEnabledDn = dlDwell ? true : false;
       this->dwellTimeDn = dlDwell ? RADIOLIB_LORAWAN_DWELL_TIME : 0;
 
       memcpy(&this->bufferSession[RADIOLIB_LORAWAN_SESSION_TX_PARAM_SETUP], optIn, lenIn);
@@ -2691,11 +2721,13 @@ void LoRaWANNode::setDutyCycle(bool enable, RadioLibTime_t msPerHour) {
 }
 
 void LoRaWANNode::setDwellTime(bool enable, RadioLibTime_t msPerUplink) {
-  this->dwellTimeEnabledUp = enable;
-  if(msPerUplink == 0) {
-    this->dwellTimeUp = this->band->dwellTimeUp;
-  } else {
+  if(!enable) {
+    this->dwellTimeUp = 0;
+    
+  } else if(msPerUplink > 0) {
     this->dwellTimeUp = msPerUplink;
+  } else {  //msPerUplink == 0
+    this->dwellTimeUp = this->band->dwellTimeUp;
   }
 }
 
@@ -2962,7 +2994,7 @@ void LoRaWANNode::getChannelPlanMask(uint64_t* chMaskGrp0123, uint32_t* chMaskGr
   }
 }
 
-void LoRaWANNode::selectChannelPlanDyn(bool joinRequest) {
+void LoRaWANNode::selectChannelPlanDyn() {
   RADIOLIB_DEBUG_PROTOCOL_PRINTLN("Setting up dynamic channels");
   
   size_t num = 0;
@@ -3098,7 +3130,7 @@ int16_t LoRaWANNode::selectChannels() {
 
   // if downlink dwelltime is enabled, datarate < 2 cannot be used, so clip to 2
   // only in use on AS923_x bands
-  if(this->dwellTimeEnabledDn && rx1Dr < 2) {
+  if(this->dwellTimeDn && rx1Dr < 2) {
     rx1Dr = 2;
   }
   this->channels[RADIOLIB_LORAWAN_DOWNLINK].dr = rx1Dr;
@@ -3250,7 +3282,7 @@ uint8_t LoRaWANNode::getMaxPayloadLen() {
   maxLen += 13;                         // mandatory FHDR is 12/13 bytes
 
   // if not limited by dwell-time, just return maximum
-  if(!this->dwellTimeEnabledUp) {
+  if(!this->dwellTimeUp) {
     // subtract FHDR (13 bytes) as well as any FOpts
     return(maxLen - 13 - this->fOptsUpLen);
   }

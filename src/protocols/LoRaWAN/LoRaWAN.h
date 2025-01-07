@@ -232,7 +232,7 @@ struct LoRaWANMacCommand_t {
 #define RADIOLIB_LORAWAN_MAC_COMMAND_NONE { .cid = 0, .lenDn = 0, .lenUp = 0, .persist = false, .user = false }
 
 constexpr LoRaWANMacCommand_t MacTable[RADIOLIB_LORAWAN_NUM_MAC_COMMANDS] = {
-  { RADIOLIB_LORAWAN_MAC_RESET,               1, 1, false, false },
+  { RADIOLIB_LORAWAN_MAC_RESET,               1, 1, true,  false },
   { RADIOLIB_LORAWAN_MAC_LINK_CHECK,          2, 0, false, true  },
   { RADIOLIB_LORAWAN_MAC_LINK_ADR,            4, 1, false, false },
   { RADIOLIB_LORAWAN_MAC_DUTY_CYCLE,          1, 0, false, false },
@@ -242,7 +242,7 @@ constexpr LoRaWANMacCommand_t MacTable[RADIOLIB_LORAWAN_NUM_MAC_COMMANDS] = {
   { RADIOLIB_LORAWAN_MAC_RX_TIMING_SETUP,     1, 0, true,  false },
   { RADIOLIB_LORAWAN_MAC_TX_PARAM_SETUP,      1, 0, true,  false },
   { RADIOLIB_LORAWAN_MAC_DL_CHANNEL,          4, 1, true,  false },
-  { RADIOLIB_LORAWAN_MAC_REKEY,               1, 1, false, false },
+  { RADIOLIB_LORAWAN_MAC_REKEY,               1, 1, true,  false },
   { RADIOLIB_LORAWAN_MAC_ADR_PARAM_SETUP,     1, 0, false, false },
   { RADIOLIB_LORAWAN_MAC_DEVICE_TIME,         5, 0, false, true  },
   { RADIOLIB_LORAWAN_MAC_FORCE_REJOIN,        2, 0, false, false },
@@ -291,11 +291,7 @@ enum LoRaWANSchemeSession_t {
   RADIOLIB_LORAWAN_SESSION_TX_PARAM_SETUP     = RADIOLIB_LORAWAN_SESSION_RX_TIMING_SETUP + 1,     // 1 byte
   RADIOLIB_LORAWAN_SESSION_ADR_PARAM_SETUP    = RADIOLIB_LORAWAN_SESSION_TX_PARAM_SETUP + 1, 	    // 1 byte
   RADIOLIB_LORAWAN_SESSION_REJOIN_PARAM_SETUP = RADIOLIB_LORAWAN_SESSION_ADR_PARAM_SETUP + 1,     // 1 byte
-  RADIOLIB_LORAWAN_SESSION_BEACON_FREQ        = RADIOLIB_LORAWAN_SESSION_REJOIN_PARAM_SETUP + 1, 	// 3 bytes
-  RADIOLIB_LORAWAN_SESSION_PING_SLOT_CHANNEL  = RADIOLIB_LORAWAN_SESSION_BEACON_FREQ + 3, 	      // 4 bytes
-  RADIOLIB_LORAWAN_SESSION_PERIODICITY        = RADIOLIB_LORAWAN_SESSION_PING_SLOT_CHANNEL + 4,   // 1 byte
-  RADIOLIB_LORAWAN_SESSION_LAST_TIME          = RADIOLIB_LORAWAN_SESSION_PERIODICITY + 1, 	      // 4 bytes
-  RADIOLIB_LORAWAN_SESSION_UL_CHANNELS        = RADIOLIB_LORAWAN_SESSION_LAST_TIME + 4, 	        // 16*5 bytes
+  RADIOLIB_LORAWAN_SESSION_UL_CHANNELS        = RADIOLIB_LORAWAN_SESSION_REJOIN_PARAM_SETUP + 1, 	// 16*5 bytes
   RADIOLIB_LORAWAN_SESSION_DL_CHANNELS        = RADIOLIB_LORAWAN_SESSION_UL_CHANNELS + RADIOLIB_LORAWAN_NUM_AVAILABLE_CHANNELS*5, // 16*4 bytes
   RADIOLIB_LORAWAN_SESSION_AVAILABLE_CHANNELS = RADIOLIB_LORAWAN_SESSION_DL_CHANNELS + RADIOLIB_LORAWAN_NUM_AVAILABLE_CHANNELS*4, // 2 bytes
   RADIOLIB_LORAWAN_SESSION_MAC_QUEUE          = RADIOLIB_LORAWAN_SESSION_AVAILABLE_CHANNELS + sizeof(uint16_t),                   // 15 bytes
@@ -747,10 +743,10 @@ class LoRaWANNode {
     void setDutyCycle(bool enable = true, RadioLibTime_t msPerHour = 0);
 
     /*!
-      \brief Toggle adherence to dwellTime limits to on or off.
+      \brief Set or disable uplink dwell time limitation; enabled by default if mandatory.
       \param enable Whether to adhere to dwellTime limits or not (default true).
       \param msPerUplink The maximum allowed Time-on-Air per uplink in milliseconds 
-      (default 0 = maximum allowed for configured band).
+      (default 0 = band default value); make sure you follow regulations/law!
     */
     void setDwellTime(bool enable, RadioLibTime_t msPerUplink = 0);
 
@@ -917,9 +913,7 @@ class LoRaWANNode {
     uint32_t dutyCycle = 0;
 
     // dwell time is set upon initialization and activated in regions that impose this
-    bool dwellTimeEnabledUp = false;
     uint16_t dwellTimeUp = 0;
-    bool dwellTimeEnabledDn = false;
     uint16_t dwellTimeDn = 0;
 
     RadioLibTime_t tUplink = 0;   // scheduled uplink transmission time (internal clock)
@@ -1068,7 +1062,7 @@ class LoRaWANNode {
     // setup uplink/downlink channel data rates and frequencies
     // for dynamic channels, there is a small set of predefined channels
     // in case of JoinRequest, add some optional extra frequencies 
-    void selectChannelPlanDyn(bool joinRequest = false);
+    void selectChannelPlanDyn();
 
     // setup uplink/downlink channel data rates and frequencies
     // for fixed bands, we only allow one sub-band at a time to be selected
