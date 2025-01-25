@@ -47,6 +47,9 @@ class TestHal : public RadioLibHal {
         this->gpio[i].event = false;
         this->gpio[i].func = PIN_UNASSIGNED;
       }
+
+      // wipe history log
+      this->spiLogWipe();
     }
 
     void term() override {
@@ -104,10 +107,18 @@ class TestHal : public RadioLibHal {
 
     void attachInterrupt(uint32_t interruptNum, void (*interruptCb)(void), uint32_t mode) override {
       HAL_LOG("TestHal::attachInterrupt(interruptNum=" << interruptNum << ", interruptCb=" << interruptCb << ", mode=" << mode << ")");
+
+      // TODO implement
+      (void)interruptNum;
+      (void)interruptCb;
+      (void)mode;
     }
 
     void detachInterrupt(uint32_t interruptNum) override {
       HAL_LOG("TestHal::detachInterrupt(interruptNum=" << interruptNum << ")");
+
+      // TODO implement
+      (void)interruptNum;
     }
 
     void delay(unsigned long ms) override {
@@ -159,6 +170,11 @@ class TestHal : public RadioLibHal {
 
     long pulseIn(uint32_t pin, uint32_t state, unsigned long timeout) override {
       HAL_LOG("TestHal::pulseIn(pin=" << pin << ", state=" << state << ", timeout=" << timeout << ")");
+
+      // TODO implement
+      (void)pin;
+      (void)state;
+      (void)timeout;
       return(0);
     }
 
@@ -168,10 +184,6 @@ class TestHal : public RadioLibHal {
 
     void spiBeginTransaction() {
       HAL_LOG("TestHal::spiBeginTransaction()");
-
-      // wipe history log
-      memset(this->spiLog, 0x00, TEST_HAL_SPI_LOG_LENGTH);
-      this->spiLogPtr = this->spiLog;
     }
 
     void spiTransfer(uint8_t* out, size_t len, uint8_t* in) {
@@ -184,7 +196,12 @@ class TestHal : public RadioLibHal {
         // process the SPI byte
         in[i] = this->radio->HandleSPI(out[i]);
 
-        // outpu debug
+        // artificial delay to emulate SPI running at a finite speed
+        // this is added because timeouts are based on time duration,
+        // so we need to make sure some time actually elapses
+        this->delayMicroseconds(100);
+
+        // output debug
         HAL_LOG(fmt::format("out={:#02x}, in={:#02x}", out[i], in[i]));
       }
     }
@@ -199,15 +216,30 @@ class TestHal : public RadioLibHal {
 
     void tone(uint32_t pin, unsigned int frequency, unsigned long duration = 0) {
       HAL_LOG("TestHal::tone(pin=" << pin << ", frequency=" << frequency << ", duration=" << duration << ")");
+
+      // TODO implement
+      (void)pin;
+      (void)frequency;
+      (void)duration;
     }
 
     void noTone(uint32_t pin) {
       HAL_LOG("TestHal::noTone(pin=" << pin << ")");
+
+      // TODO implement
+      (void)pin;
     }
 
     // method to compare buffer to the internal SPI log, for verifying SPI transactions
     int spiLogMemcmp(const void* in, size_t n) {
-      return(memcmp(this->spiLog, in, n));
+      int ret = memcmp(this->spiLog, in, n);
+      this->spiLogWipe();
+      return(ret);
+    }
+
+    void spiLogWipe() {
+      memset(this->spiLog, 0x00, TEST_HAL_SPI_LOG_LENGTH);
+      this->spiLogPtr = this->spiLog;
     }
 
     // method that "connects" the emualted radio hardware to this HAL
