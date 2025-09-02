@@ -1081,9 +1081,12 @@ class LoRaWANNode {
     LoRaWANChannel_t channels[4] = { RADIOLIB_LORAWAN_CHANNEL_NONE, RADIOLIB_LORAWAN_CHANNEL_NONE,
                                      RADIOLIB_LORAWAN_CHANNEL_NONE, RADIOLIB_LORAWAN_CHANNEL_NONE };
 
-    // delays between the uplink and Rx1/2 windows
-    // the first field is meaningless, but is used for offsetting for Rx windows 1 and 2
-    RadioLibTime_t rxDelays[3] = { 0, RADIOLIB_LORAWAN_RECEIVE_DELAY_1_MS, RADIOLIB_LORAWAN_RECEIVE_DELAY_2_MS };
+    // delays between the uplink and Rx windows
+    // the first field is meaningless, but is used for offsetting the Rx windows
+    RadioLibTime_t rxDelays[4] = { 0, 
+                                   RADIOLIB_LORAWAN_RECEIVE_DELAY_1_MS, 
+                                   RADIOLIB_LORAWAN_RECEIVE_DELAY_2_MS,
+                                   0 };
 
     // offset between Tx and Rx1 (such that Rx1 has equal or lower DR)
     uint8_t rx1DrOffset = 0;
@@ -1149,14 +1152,14 @@ class LoRaWANNode {
     int16_t receiveClassC(RadioLibTime_t timeout = 0);
 
     // open a series of Class A (and C) downlinks
-    int16_t receiveDownlink();
+    virtual int16_t receiveDownlink();
 
     // extract downlink payload and process MAC commands
     int16_t parseDownlink(uint8_t* data, size_t* len, uint8_t window, LoRaWANEvent_t* event = NULL);
 
     // add a LoRaWAN package that runs through the network layer 
     // (not available to users, they are only allowed to add application packages)
-    int16_t addNwkPackage(uint8_t packageId, PackageCb_t callback);
+    int16_t addNwkPackage(uint8_t packageId);
 
     // execute mac command, return the number of processed bytes for sequential processing
     bool execMacCommand(uint8_t cid, uint8_t* optIn, uint8_t lenIn);
@@ -1232,7 +1235,7 @@ class LoRaWANNode {
     void processAES(const uint8_t* in, size_t len, uint8_t* key, uint8_t* out, uint32_t addr, uint32_t fCnt, uint8_t dir, uint8_t ctrId, bool counter);
 
     // function that allows sleeping via user-provided callback
-    void sleepDelay(RadioLibTime_t ms);
+    void sleepDelay(RadioLibTime_t ms, bool radioOff = true);
 
     // 16-bit checksum method that takes a uint8_t array of even length and calculates the checksum
     static uint16_t checkSum16(const uint8_t *key, uint16_t keyLen);
