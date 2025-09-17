@@ -567,11 +567,13 @@ class SX126x: public PhysicalLayer {
     /*!
       \brief Blocking binary receive method.
       Overloads for string-based transmissions are implemented in PhysicalLayer.
-      \param data Binary data to be sent.
-      \param len Number of bytes to send.
+      \param data Pointer to array to save the received binary data.
+      \param len Number of bytes that will be received. Must be known in advance for binary transmissions.
+      \param timeout Reception timeout in milliseconds. If set to 0,
+      timeout period will be calculated automatically based on the radio configuration.
       \returns \ref status_codes
     */
-    int16_t receive(uint8_t* data, size_t len) override;
+    int16_t receive(uint8_t* data, size_t len, RadioLibTime_t timeout = 0) override;
 
     /*!
       \brief Starts direct mode transmission.
@@ -689,6 +691,12 @@ class SX126x: public PhysicalLayer {
       \returns \ref status_codes
     */
     int16_t finishTransmit() override;
+
+    /*!
+      \brief Clean up after reception is done.
+      \returns \ref status_codes
+    */
+    int16_t finishReceive() override;
     
     /*!
       \brief Interrupt-driven receive method with default parameters.
@@ -716,6 +724,8 @@ class SX126x: public PhysicalLayer {
       \brief Calls \ref startReceiveDutyCycle with rxPeriod and sleepPeriod set so the unit shouldn't miss any messages.
       \param senderPreambleLength Expected preamble length of the messages to receive.
       If set to zero, the currently configured preamble length will be used. Defaults to zero.
+      If the sender preamble length is variable or unknown, the maximum expected size should be configured
+      on the receiver side by calling setPreambleLength prior to startReceiveDutyCycleAuto.
 
       \param minSymbols Parameters will be chosen to ensure that the unit will catch at least this many symbols
       of any preamble of the specified length. Defaults to 8.
