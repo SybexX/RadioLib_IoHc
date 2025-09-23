@@ -35,8 +35,8 @@ struct LoRaRate_t {
   
   /*! \brief LoRa bandwidth in kHz */
   float bandwidth;
-  
-  /*! \brief LoRa coding rate */
+
+  /*! \brief LoRa coding rate denominator */
   uint8_t codingRate;
 };
 
@@ -80,6 +80,46 @@ union DataRate_t {
 
   /*! \brief Interpretation for LR-FHSS modems */
   LrFhssRate_t lrFhss;
+};
+
+struct LoRaPacketConfig_t {
+  /*! \brief LoRa preamble length */
+  uint16_t preambleLength;
+
+  /*! \brief LoRa implicit header mode */
+  bool implicitHeader;
+
+  /*! \brief LoRa CRC mode */
+  bool crcEnabled;
+
+  /*! \brief LoRa low data rate optimization */
+  bool ldrOptimize;
+};
+
+struct FSKPacketConfig_t {
+  /*! \brief FSK preamble length in bits */
+  uint16_t preambleLength;
+
+  /*! \brief Length of the sync word in bits */
+  uint8_t syncWordLength;
+
+  /*! \brief FSK CRC length in bytes */
+  uint8_t crcLength;
+};
+
+struct LrFhssPacketConfig_t {
+  /*! \brief LR-FHSS header count (1 - 4) */
+  uint8_t hdrCount;
+};
+
+/*!
+  \union PacketConfig_t
+  \brief Common packet configuration structure
+*/
+union PacketConfig_t {
+  LoRaPacketConfig_t lora;
+  FSKPacketConfig_t fsk;
+  LrFhssPacketConfig_t lrFhss;
 };
 
 /*!
@@ -190,6 +230,7 @@ enum ModemType_t {
   RADIOLIB_MODEM_FSK = 0,
   RADIOLIB_MODEM_LORA,
   RADIOLIB_MODEM_LRFHSS,
+  RADIOLIB_MODEM_NONE,  // last entry
 };
 
 /*!
@@ -481,18 +522,22 @@ class PhysicalLayer {
     virtual int16_t setPreambleLength(size_t len);
     
     /*!
-      \brief Set data. Must be implemented in module class if the module supports it.
-      \param dr Data rate struct. Interpretation depends on currently active modem (FSK or LoRa).
+      \brief Set data rate. Must be implemented in module class if the module supports it.
+      \param dr Data rate struct.
+      \param modem The modem corresponding to the requested datarate (FSK, LoRa or LR-FHSS). 
+      Defaults to currently active modem if not supplied.
       \returns \ref status_codes
     */
-    virtual int16_t setDataRate(DataRate_t dr);
+    virtual int16_t setDataRate(DataRate_t dr, ModemType_t modem = RADIOLIB_MODEM_NONE);
 
     /*!
       \brief Check the data rate can be configured by this module. Must be implemented in module class if the module supports it.
-      \param dr Data rate struct. Interpretation depends on currently active modem (FSK or LoRa).
+      \param dr Data rate struct.
+      \param modem The modem corresponding to the requested datarate (FSK, LoRa or LR-FHSS). 
+      Defaults to currently active modem if not supplied.
       \returns \ref status_codes
     */
-    virtual int16_t checkDataRate(DataRate_t dr);
+    virtual int16_t checkDataRate(DataRate_t dr, ModemType_t modem = RADIOLIB_MODEM_NONE);
 
     /*!
       \brief Query modem for the packet length of received payload. Must be implemented in module class.
@@ -512,6 +557,16 @@ class PhysicalLayer {
       \returns SNR of the last received packet in dB.
     */
     virtual float getSNR();
+    
+    /*!
+      \brief Calculate the expected time-on-air for a given modem, data rate, packet configuration and payload size.
+      \param modem Modem type.
+      \param dr Data rate.
+      \param pc Packet config.
+      \param len Payload length in bytes.
+      \returns Expected time-on-air in microseconds.
+    */
+    virtual RadioLibTime_t calculateTimeOnAir(ModemType_t modem, DataRate_t dr, PacketConfig_t pc, size_t len);
 
     /*!
       \brief Get expected time-on-air for a given size of payload

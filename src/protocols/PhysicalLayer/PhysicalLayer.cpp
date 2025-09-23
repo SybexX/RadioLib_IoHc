@@ -289,13 +289,15 @@ int16_t PhysicalLayer::setPreambleLength(size_t len) {
   return(RADIOLIB_ERR_UNSUPPORTED);
 }
 
-int16_t PhysicalLayer::setDataRate(DataRate_t dr) {
+int16_t PhysicalLayer::setDataRate(DataRate_t dr, ModemType_t modem) {
   (void)dr;
+  (void)modem;
   return(RADIOLIB_ERR_UNSUPPORTED);
 }
 
-int16_t PhysicalLayer::checkDataRate(DataRate_t dr) {
+int16_t PhysicalLayer::checkDataRate(DataRate_t dr, ModemType_t modem) {
   (void)dr;
+  (void)modem;
   return(RADIOLIB_ERR_UNSUPPORTED);
 }
 
@@ -310,6 +312,14 @@ float PhysicalLayer::getRSSI() {
 
 float PhysicalLayer::getSNR() {
   return(RADIOLIB_ERR_UNSUPPORTED);
+}
+
+RadioLibTime_t PhysicalLayer::calculateTimeOnAir(ModemType_t modem, DataRate_t dr, PacketConfig_t pc, size_t len) {
+  (void)modem;
+  (void)dr;
+  (void)pc;
+  (void)len;
+  return(0);
 }
 
 RadioLibTime_t PhysicalLayer::getTimeOnAir(size_t len) {
