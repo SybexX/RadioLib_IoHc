@@ -278,7 +278,7 @@ struct LoRaWANPackage_t {
   /*! \brief Whether the package runs through the Application layer */
   bool isAppPack;
 
-  /*! \brief Whether the FPort value is fixed or may be modified */
+  /*! \brief Whether the FPort value has a fixed value by specification */
   bool fixedFPort;
 
   /*! \brief Whether the package is currently in use */
@@ -289,13 +289,13 @@ struct LoRaWANPackage_t {
 };
 
 constexpr LoRaWANPackage_t PackageTable[RADIOLIB_LORAWAN_NUM_SUPPORTED_PACKAGES] = {
-  { RADIOLIB_LORAWAN_PACKAGE_TS007, RADIOLIB_LORAWAN_FPORT_TS007, true,  false, false, NULL },
-  { RADIOLIB_LORAWAN_PACKAGE_TS003, RADIOLIB_LORAWAN_FPORT_TS003, true,  true,  false, NULL },
-  { RADIOLIB_LORAWAN_PACKAGE_TS005, RADIOLIB_LORAWAN_FPORT_TS005, true,  true,  false, NULL },
-  { RADIOLIB_LORAWAN_PACKAGE_TS004, RADIOLIB_LORAWAN_FPORT_TS004, true,  true,  false, NULL },
-  { RADIOLIB_LORAWAN_PACKAGE_TS006, RADIOLIB_LORAWAN_FPORT_TS006, true,  true,  false, NULL },
-  { RADIOLIB_LORAWAN_PACKAGE_TS009, RADIOLIB_LORAWAN_FPORT_TS009, true,  false, false, NULL },
-  { RADIOLIB_LORAWAN_PACKAGE_TS011, RADIOLIB_LORAWAN_FPORT_TS011, false, false, false, NULL }
+  { RADIOLIB_LORAWAN_PACKAGE_TS007, RADIOLIB_LORAWAN_FPORT_TS007, true,  true,  false, NULL },
+  { RADIOLIB_LORAWAN_PACKAGE_TS003, RADIOLIB_LORAWAN_FPORT_TS003, true,  false, false, NULL },
+  { RADIOLIB_LORAWAN_PACKAGE_TS005, RADIOLIB_LORAWAN_FPORT_TS005, true,  false, false, NULL },
+  { RADIOLIB_LORAWAN_PACKAGE_TS004, RADIOLIB_LORAWAN_FPORT_TS004, true,  false, false, NULL },
+  { RADIOLIB_LORAWAN_PACKAGE_TS006, RADIOLIB_LORAWAN_FPORT_TS006, true,  false, false, NULL },
+  { RADIOLIB_LORAWAN_PACKAGE_TS009, RADIOLIB_LORAWAN_FPORT_TS009, true,  true,  false, NULL },
+  { RADIOLIB_LORAWAN_PACKAGE_TS011, RADIOLIB_LORAWAN_FPORT_TS011, false, true,  false, NULL }
 };
 
 #define RADIOLIB_LORAWAN_PACKAGE_NONE { .packId = 0, .packFPort = 0, .isAppPack = false, .fixedFPort = false, .enabled = false, .callback = NULL }
@@ -770,8 +770,6 @@ class LoRaWANNode {
 
     /*!
       \brief Returns the quality of connectivity after requesting a LinkCheck MAC command.
-      Returns 'true' if a network response was successfully parsed.
-      Returns 'false' if there was no network response / parsing failed.
       \param margin Link margin in dB of LinkCheckReq demodulation at gateway side.
       \param gwCnt Number of gateways that received the LinkCheckReq.
       \returns \ref status_codes
@@ -780,14 +778,15 @@ class LoRaWANNode {
 
     /*!
       \brief Returns the network time after requesting a DeviceTime MAC command.
-      Returns 'true' if a network response was successfully parsed.
-      Returns 'false' if there was no network response / parsing failed.
-      \param gpsEpoch Number of seconds since GPS epoch (Jan. 6th 1980)
-      \param fraction Fractional-second, in 1/256-second steps
-      \param returnUnix If true, returns Unix timestamp instead of GPS (default true)
+      Note: the network returns the time at the end of the uplink transmission.
+      The return value of this function automatically adjusts to the current time.
+      This time is supposed to be <100ms accurate, but may be accurate to 1 second.
+      \param timestamp Number of seconds since GPS epoch (Jan. 6th 1980).
+      \param milliseconds Milliseconds on top of the timestamp.
+      \param returnUnix If true, returns Unix timestamp instead of GPS (default true).
       \returns \ref status_codes
     */
-    int16_t getMacDeviceTimeAns(uint32_t* gpsEpoch, uint8_t* fraction, bool returnUnix = true);
+    int16_t getMacDeviceTimeAns(uint32_t* timestamp, uint16_t* milliseconds, bool returnUnix = true);
 
     /*!
       \brief Set uplink datarate. This should not be used when ADR is enabled.
@@ -1086,7 +1085,7 @@ class LoRaWANNode {
     RadioLibTime_t lastToA = 0;
 
     // timestamp to measure the Rx1/2 delay (from uplink end)
-    RadioLibTime_t rxDelayStart = 0;
+    RadioLibTime_t tUplinkEnd = 0;
 
     // duration of SPI transaction for phyLayer->launchMode()
     RadioLibTime_t launchDuration = 0;

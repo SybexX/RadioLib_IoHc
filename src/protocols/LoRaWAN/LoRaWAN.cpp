@@ -90,6 +90,10 @@ int16_t LoRaWANNode::sendReceive(const uint8_t* dataUp, size_t lenUp, uint8_t fP
   state = this->isValidUplink(lenUp + this->fOptsUpLen, fPort);
   RADIOLIB_ASSERT(state);
 
+  // clear the MAC downlink buffer as we are going to transmit a new uplink
+  memset(this->fOptsDown, 0, RADIOLIB_LORAWAN_FHDR_FOPTS_MAX_LEN);
+  this->fOptsDownLen = 0;
+
   // the first 16 bytes are reserved for MIC calculation blocks
   size_t uplinkMsgLen = RADIOLIB_LORAWAN_FRAME_LEN(lenUp, this->fOptsUpLen);
   #if RADIOLIB_STATIC_ONLY
@@ -1382,7 +1386,7 @@ int16_t LoRaWANNode::transmitUplink(const LoRaWANChannel_t* chnl, uint8_t* in, u
   // if dutycycle is enabled and the time since last uplink + interval has not elapsed, return an error
   // but: don't check this for retransmissions
   if(!retrans && this->dutyCycleEnabled) {
-    if(this->rxDelayStart + (RadioLibTime_t)dutyCycleInterval(this->dutyCycle, this->lastToA) > this->tUplink) {
+    if(this->tUplinkEnd + (RadioLibTime_t)dutyCycleInterval(this->dutyCycle, this->lastToA) > this->tUplink) {
       return(RADIOLIB_ERR_UPLINK_UNAVAILABLE);
     }
   }
@@ -1446,8 +1450,8 @@ int16_t LoRaWANNode::transmitUplink(const LoRaWANChannel_t* chnl, uint8_t* in, u
   state = this->phyLayer->finishTransmit();
 
   // set the timestamp so that we can measure when to start receiving
-  this->rxDelayStart = mod->hal->millis();
-  RADIOLIB_DEBUG_PROTOCOL_PRINTLN("Uplink sent <-- Rx Delay start");
+  this->tUplinkEnd = mod->hal->millis();
+  RADIOLIB_DEBUG_PROTOCOL_PRINTLN("Uplink sent (ToA = %d ms)", toa);
 
   // increase Time on Air of the uplink sequence
   this->lastToA += toa;
@@ -1528,14 +1532,14 @@ int16_t LoRaWANNode::receiveClassA(uint8_t dir, const LoRaWANChannel_t* dlChanne
   state = this->phyLayer->launchMode();
   RadioLibTime_t tOpen = mod->hal->millis();
   RADIOLIB_ASSERT(state);
-  RADIOLIB_DEBUG_PROTOCOL_PRINTLN("Opened Rx%d window (%d ms timeout)... <-- Rx Delay end ", window, (int)(timeoutUs / 1000 + 2));
+  RADIOLIB_DEBUG_PROTOCOL_PRINTLN("Rx%d window open (%lu + %lu ms)", window, timeoutUs / 1000UL, this->scanGuard);
   
   // sleep for the duration of the padded Rx window
   this->sleepDelay(timeoutUs / 1000, false);
   
   // wait for the DIO interrupt to fire (RxDone or RxTimeout)
   // use a small additional delay in case the RxTimeout interrupt is slow to fire
-  RADIOLIB_DEBUG_PROTOCOL_PRINTLN("Closing Rx%d window", window);
+  RADIOLIB_DEBUG_PROTOCOL_PRINTLN("Rx%d window closing", window);
   while(!downlinkAction && mod->hal->millis() - tOpen <= timeoutUs / 1000 + this->scanGuard) {
     mod->hal->yield();
   }
@@ -1682,7 +1686,7 @@ int16_t LoRaWANNode::receiveDownlink() {
   Module* mod = this->phyLayer->getMod();
 
   // if applicable, open Class C between uplink and Rx1
-  RadioLibTime_t timeoutClassC = this->rxDelayStart + this->rxDelays[RADIOLIB_LORAWAN_RX1] - \
+  RadioLibTime_t timeoutClassC = this->tUplinkEnd + this->rxDelays[RADIOLIB_LORAWAN_RX1] - \
                                   mod->hal->millis() - 5*this->scanGuard;
   int16_t state = this->receiveClassC(timeoutClassC);
   RADIOLIB_ASSERT(state);
@@ -1692,7 +1696,7 @@ int16_t LoRaWANNode::receiveDownlink() {
                               &this->channels[RADIOLIB_LORAWAN_RX1], 
                               RADIOLIB_LORAWAN_RX1, 
                               this->rxDelays[RADIOLIB_LORAWAN_RX1], 
-                              this->rxDelayStart);
+                              this->tUplinkEnd);
   RADIOLIB_ASSERT(state);
   
   // for LoRaWAN v1.1 Class C, there is no Rx2 window: it keeps RxC open uninterrupted
@@ -1702,7 +1706,7 @@ int16_t LoRaWANNode::receiveDownlink() {
   }
 
   // for LoRaWAN v1.0.4 Class C, there is an RxC window between Rx1 and Rx2
-  timeoutClassC = this->rxDelayStart + this->rxDelays[RADIOLIB_LORAWAN_RX2] - \
+  timeoutClassC = this->tUplinkEnd + this->rxDelays[RADIOLIB_LORAWAN_RX2] - \
                                   mod->hal->millis() - 5*this->scanGuard;
   state = this->receiveClassC(timeoutClassC);
   RADIOLIB_ASSERT(state);
@@ -1712,7 +1716,7 @@ int16_t LoRaWANNode::receiveDownlink() {
                               &this->channels[RADIOLIB_LORAWAN_RX2], 
                               RADIOLIB_LORAWAN_RX2, 
                               this->rxDelays[RADIOLIB_LORAWAN_RX2], 
-                              this->rxDelayStart);
+                              this->tUplinkEnd);
   RADIOLIB_ASSERT(state);
 
   state = this->receiveClassC();
@@ -1956,11 +1960,9 @@ int16_t LoRaWANNode::parseDownlink(uint8_t* data, size_t* len, uint8_t window, L
     // a Class A downlink was received, so restart the ADR counter with the next uplink
     this->adrFCnt = this->getFCntUp() + 1;
 
-    // a Class A downlink was received, so we can clear the MAC uplink and downlink buffers
+    // a Class A downlink was received, so we can clear the MAC uplink buffer
     memset(this->fOptsUp, 0, RADIOLIB_LORAWAN_FHDR_FOPTS_MAX_LEN);
     this->fOptsUpLen = 0;
-    memset(this->fOptsDown, 0, RADIOLIB_LORAWAN_FHDR_FOPTS_MAX_LEN);
-    this->fOptsDownLen = 0;
   }
 
   #if !RADIOLIB_STATIC_ONLY
@@ -2860,19 +2862,28 @@ int16_t LoRaWANNode::getMacLinkCheckAns(uint8_t* margin, uint8_t* gwCnt) {
   return(RADIOLIB_ERR_NONE);
 }
 
-int16_t LoRaWANNode::getMacDeviceTimeAns(uint32_t* gpsEpoch, uint8_t* fraction, bool returnUnix) {
+int16_t LoRaWANNode::getMacDeviceTimeAns(uint32_t* timestamp, uint16_t* fraction, bool returnUnix) {
   uint8_t payload[5] = { 0 };
   int16_t state = this->getMacPayload(RADIOLIB_LORAWAN_MAC_DEVICE_TIME, this->fOptsDown, this->fOptsDownLen, payload, RADIOLIB_LORAWAN_DOWNLINK);
   RADIOLIB_ASSERT(state);
 
-  if(gpsEpoch) { 
-    *gpsEpoch = LoRaWANNode::ntoh<uint32_t>(&payload[0]); 
+  Module* mod = this->phyLayer->getMod();
+
+  // calculate the millisecond fraction
+  RadioLibTime_t ms = (RadioLibTime_t)payload[4] * 1000UL / 256UL;
+
+  // add offset between current time and end of uplink transmission
+  ms += mod->hal->millis() - this->tUplinkEnd;
+
+  if(timestamp) { 
+    *timestamp = LoRaWANNode::ntoh<uint32_t>(&payload[0]);
+    *timestamp += ms / 1000;
     if(returnUnix) {
       uint32_t unixOffset = 315964800UL - 18UL; // 18 leap seconds since GPS epoch (Jan. 6th 1980)
-      *gpsEpoch += unixOffset;
+      *timestamp += unixOffset;
     }
   }
-  if(fraction) { *fraction = payload[4]; }
+  if(fraction) { *fraction = ms % 1000; }
 
   return(RADIOLIB_ERR_NONE);
 }
@@ -2995,7 +3006,7 @@ void LoRaWANNode::clearMacCommands(uint8_t* inOut, uint8_t* lenInOut, uint8_t di
     uint8_t id = inOut[i];
     uint8_t fLen = 0;
     // include CID byte, so if command fails, we still move one byte forward
-    (void)this->getMacLen(id, &fLen, dir, true);
+    (void)this->getMacLen(id, &fLen, dir, true, &inOut[i+1]);
 
     // only clear MAC command if it should not persist until a downlink is received
     if(!this->isPersistentMacCommand(id, dir)) {
@@ -3176,8 +3187,8 @@ int16_t LoRaWANNode::setPhyProperties(const LoRaWANChannel_t* chnl, uint8_t dir,
   state = this->phyLayer->setDataRate(*dr, this->band->dataRates[chnl->dr].modem);
   RADIOLIB_ASSERT(state);
 
-  RADIOLIB_DEBUG_PROTOCOL_PRINTLN("");
-  RADIOLIB_DEBUG_PROTOCOL_PRINTLN("PHY:  Frequency = %7.3f MHz, TX = %d dBm", chnl->freq / 10000.0, pwr);
+  RADIOLIB_DEBUG_PROTOCOL_PRINTLN_NOTAG("");
+  RADIOLIB_DEBUG_PROTOCOL_PRINTLN("Frequency = %7.3f MHz, TX = %d dBm", chnl->freq / 10000.0, pwr);
   state = this->phyLayer->setFrequency(chnl->freq / 10000.0);
   RADIOLIB_ASSERT(state);
   
@@ -3204,7 +3215,7 @@ int16_t LoRaWANNode::setPhyProperties(const LoRaWANChannel_t* chnl, uint8_t dir,
       syncWord[1] = (uint8_t)(RADIOLIB_LORAWAN_GFSK_SYNC_WORD >> 8);
       syncWord[2] = (uint8_t)RADIOLIB_LORAWAN_GFSK_SYNC_WORD;
       syncWordLen = 3;
-      RADIOLIB_DEBUG_PROTOCOL_PRINTLN("FSK:  BR = %4.1f, FD = %4.1f kHz", 
+      RADIOLIB_DEBUG_PROTOCOL_PRINTLN("[FSK] BR = %4.1f, FD = %4.1f kHz", 
                                       (double)dr->fsk.bitRate, (double)dr->fsk.freqDev);
     } break;
 
@@ -3220,7 +3231,7 @@ int16_t LoRaWANNode::setPhyProperties(const LoRaWANChannel_t* chnl, uint8_t dir,
 
       syncWord[0] = RADIOLIB_LORAWAN_LORA_SYNC_WORD;
       syncWordLen = 1;
-      RADIOLIB_DEBUG_PROTOCOL_PRINTLN("LoRa: SF = %d, BW = %5.1f kHz, CR = 4/%d, IQ: %c", 
+      RADIOLIB_DEBUG_PROTOCOL_PRINTLN("[LoRa] SF = %d, BW = %5.1f kHz, CR = 4/%d, IQ: %c", 
                                     dr->lora.spreadingFactor, (double)dr->lora.bandwidth, dr->lora.codingRate, dir ? 'D' : 'U');
     } break;
 
@@ -3230,7 +3241,7 @@ int16_t LoRaWANNode::setPhyProperties(const LoRaWANChannel_t* chnl, uint8_t dir,
       syncWord[2] = (uint8_t)(RADIOLIB_LORAWAN_LR_FHSS_SYNC_WORD >> 8);
       syncWord[3] = (uint8_t)RADIOLIB_LORAWAN_LR_FHSS_SYNC_WORD;
       syncWordLen = 4;
-      RADIOLIB_DEBUG_PROTOCOL_PRINTLN("LR-FHSS: BW = 0x%02x, CR = 0x%02x kHz, grid = %c", 
+      RADIOLIB_DEBUG_PROTOCOL_PRINTLN("[LR-FHSS] BW = 0x%02x, CR = 0x%02x kHz, grid = %c", 
                                     dr->lrFhss.bw, dr->lrFhss.cr, dr->lrFhss.narrowGrid ? 'N' : 'W');
     } break;
 
@@ -3533,7 +3544,7 @@ RadioLibTime_t LoRaWANNode::dutyCycleInterval(RadioLibTime_t msPerHour, RadioLib
 
 RadioLibTime_t LoRaWANNode::timeUntilUplink() {
   Module* mod = this->phyLayer->getMod();
-  RadioLibTime_t nextUplink = this->rxDelayStart + dutyCycleInterval(this->dutyCycle, this->lastToA);
+  RadioLibTime_t nextUplink = this->tUplinkEnd + dutyCycleInterval(this->dutyCycle, this->lastToA);
   if(mod->hal->millis() > nextUplink){
     return(0);
   }
