@@ -238,10 +238,16 @@ int16_t SX126x::setBitRate(float br) {
   this->bitRate = brRaw;
 
   // update modulation parameters
+  int16_t state = RADIOLIB_ERR_UNKNOWN;
   if(modem == RADIOLIB_SX126X_PACKET_TYPE_BPSK) {
-    return(setModulationParamsBPSK(this->bitRate));
+    state = setModulationParamsBPSK(this->bitRate);
+  } else {
+    state = setModulationParamsFSK(this->bitRate, this->pulseShape, this->rxBandwidth, this->frequencyDev);
   }
-  return(setModulationParamsFSK(this->bitRate, this->pulseShape, this->rxBandwidth, this->frequencyDev));
+  RADIOLIB_ASSERT(state);
+
+  // apply workaround or reset it, as needed
+  return(fixGFSK());
 }
 
 int16_t SX126x::setDataRate(DataRate_t dr, ModemType_t modem) {
@@ -479,25 +485,6 @@ int16_t SX126x::setSyncWord(uint8_t* syncWord, size_t len) {
   }
 
   return(RADIOLIB_ERR_WRONG_MODEM);
-}
-
-int16_t SX126x::setSyncBits(uint8_t *syncWord, uint8_t bitsLen) {
-  // check active modem
-  if(getPacketType() != RADIOLIB_SX126X_PACKET_TYPE_GFSK) {
-    return(RADIOLIB_ERR_WRONG_MODEM);
-  }
-
-  // check sync word Length
-  if(bitsLen > 0x40) {
-    return(RADIOLIB_ERR_INVALID_SYNC_WORD);
-  }
-
-  uint8_t bytesLen = bitsLen / 8;
-  if ((bitsLen % 8) != 0) {
-    bytesLen++;
-  }
-
-  return(setSyncWord(syncWord, bytesLen));
 }
 
 int16_t SX126x::setCRC(uint8_t len, uint16_t initial, uint16_t polynomial, bool inverted) {
