@@ -63,13 +63,12 @@ class PiHal : public RadioLibHal {
       }
 
       int result;
-      int flags = 0;
       switch(mode) {
         case PI_INPUT:
-          result = lgGpioClaimInput(_gpioHandle, 0, pin);
+          result = lgGpioClaimInput(_gpioHandle, pinFlags[pin], pin);
           break;
         case PI_OUTPUT:
-          result = lgGpioClaimOutput(_gpioHandle, flags, pin, LG_HIGH);
+          result = lgGpioClaimOutput(_gpioHandle, pinFlags[pin], pin, LG_HIGH);
           break;
         default:
           fprintf(stderr, "Unknown pinMode mode %" PRIu32 "\n", mode);
@@ -226,6 +225,14 @@ class PiHal : public RadioLibHal {
       lgTxPwm(_gpioHandle, pin, 0, 0, 0, 0);
     }
 
+    void pullUpDown(uint32_t pin, bool enable, bool up) {
+      if((pin == RADIOLIB_NC) || (pin > PI_MAX_USER_GPIO)) {
+        return;
+      }
+
+      pinFlags[pin] = enable ? (up ? LG_SET_PULL_UP : LG_SET_PULL_DOWN) : LG_SET_PULL_NONE;
+    }
+
     // interrupt emulation
     bool interruptEnabled[PI_MAX_USER_GPIO + 1];
     uint32_t interruptModes[PI_MAX_USER_GPIO + 1];
@@ -240,6 +247,8 @@ class PiHal : public RadioLibHal {
     const uint8_t _spiChannel;
     int _gpioHandle = -1;
     int _spiHandle = -1;
+
+    int pinFlags[PI_MAX_USER_GPIO + 1] = { 0 };
 };
 
 // this handler emulates interrupts
