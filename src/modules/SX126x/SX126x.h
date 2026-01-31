@@ -209,10 +209,18 @@ class SX126x: public PhysicalLayer {
       \brief Sets the module to standby mode.
       \param mode Oscillator to be used in standby mode. Can be set to RADIOLIB_SX126X_STANDBY_RC (13 MHz RC oscillator)
       or RADIOLIB_SX126X_STANDBY_XOSC (32 MHz external crystal oscillator).
+      \returns \ref status_codes
+    */
+    int16_t standby(uint8_t mode) override;
+
+    /*!
+      \brief Sets the module to standby mode.
+      \param mode Oscillator to be used in standby mode. Can be set to RADIOLIB_SX126X_STANDBY_RC (13 MHz RC oscillator)
+      or RADIOLIB_SX126X_STANDBY_XOSC (32 MHz external crystal oscillator).
       \param wakeup Whether to force the module to wake up. Setting to true will immediately attempt to wake up the module.
       \returns \ref status_codes
     */
-    int16_t standby(uint8_t mode, bool wakeup = true);
+    int16_t standby(uint8_t mode, bool wakeup);
 
     /*!
       \brief Handle LR-FHSS hop. 
@@ -518,12 +526,6 @@ class SX126x: public PhysicalLayer {
       \returns \ref status_codes
     */
     int16_t setDio2AsRfSwitch(bool enable = true);
-
-    /*!
-      \brief Gets effective data rate for the last transmitted packet. The value is calculated only for payload bytes.
-      \returns Effective data rate in bps.
-    */
-    float getDataRate() const;
 
     /*!
       \brief Gets recorded signal strength indicator.
@@ -884,8 +886,6 @@ class SX126x: public PhysicalLayer {
     uint8_t preambleDetLength = 0, rxBandwidth = 0, pulseShape = 0, crcTypeFSK = 0, syncWordLength = 0, whitening = 0, packetType = 0;
     uint16_t preambleLengthFSK = 0;
     float rxBandwidthKhz = 0;
-
-    float dataRateMeasured = 0;
 
     uint32_t tcxoDelay = 0;
     uint8_t pwr = 0;

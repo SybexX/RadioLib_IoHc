@@ -131,8 +131,10 @@ void LR2021::setRfSwitchTable(const uint32_t (&pins)[Module::RFSWITCH_MAX_PINS],
       j++;
     }
 
+    // For DIO = 5, only DIO_SLEEP_PULL_UP is accepted. Otherwise the SetDioFunction returns FAIL.
+    uint8_t pull = dioNum == 0 ? RADIOLIB_LR2021_DIO_SLEEP_PULL_UP : RADIOLIB_LR2021_DIO_SLEEP_PULL_AUTO;
     // enable RF control for this pin and set the modes in which it is active
-    (void)this->setDioFunction(dioNum + 5, RADIOLIB_LR2021_DIO_FUNCTION_RF_SWITCH, RADIOLIB_LR2021_DIO_SLEEP_PULL_AUTO);
+    (void)this->setDioFunction(dioNum + 5, RADIOLIB_LR2021_DIO_FUNCTION_RF_SWITCH, pull);
     (void)this->setDioRfSwitchConfig(dioNum + 5, dioConfigs[i]);
   }
 }
@@ -287,7 +289,7 @@ int16_t LR2021::setPreambleLength(size_t preambleLength) {
   } else if(type == RADIOLIB_LR2021_PACKET_TYPE_GFSK) {
     this->preambleLengthGFSK = preambleLength;
     this->preambleDetLength = (preambleLength / 8) << 3;
-    return(setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, true, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening));
+    return(setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, false, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening));
   
   } else if(type == RADIOLIB_LR2021_PACKET_TYPE_OOK) {
     this->preambleLengthGFSK = preambleLength;
@@ -381,7 +383,7 @@ int16_t LR2021::setCRC(uint8_t len, uint32_t initial, uint32_t polynomial, bool 
       this->crcTypeGFSK += 0x08;
     }
 
-    state = setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, true, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening);
+    state = setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, false, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening);
     RADIOLIB_ASSERT(state);
 
     return(setGfskCrcParams(initial, polynomial));
@@ -500,6 +502,65 @@ int16_t LR2021::setFrequencyDeviation(float freqDev) {
   return(state);
 }
 
+int16_t LR2021::findRxBw(float rxBw, uint8_t* val) {
+  // lookup tables to avoid comparing a whole bunch of floats
+  uint16_t rxBwAvg[] = {
+    53, 66, 85, 108, 134, 170, 211, 264,
+    341, 424, 529, 682, 847, 1058, 1364,
+    1695, 2116, 2729, 3390, 4233, 5159,
+    6111, 7179, 9401, 16665, 24440, 28710,
+  };
+  uint8_t rxBwRaw[] = {
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_4_8,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_5_8,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_7_4,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_9_7,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_12_0,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_14_9,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_19_2,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_23_1,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_29_8,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_38_5,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_46_3,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_59_5,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_76_9,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_92_6,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_119_0,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_153_8,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_185_2,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_238_1,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_307_7,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_370_4,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_476_2,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_555_6,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_666_7,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_769_2,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_1111,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_2222,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_2666,
+    RADIOLIB_LR2021_GFSK_OOK_RX_BW_3076,
+  };
+
+  // iterate through the table and find whether the user-provided value
+  // is lower than the pre-computed average of the adjacent bandwidth values
+  // if it is, we consider that to be a match even though the actual value is not precise
+  uint16_t rxBwInt = rxBw*10.0f;
+  for(size_t i = 0; i < sizeof(rxBwAvg)/sizeof(rxBwAvg[0]); i++) {
+    if(rxBwInt < rxBwAvg[i]) {
+      *val = rxBwRaw[i];
+      return(RADIOLIB_ERR_NONE);
+    }
+  }
+
+  // if nothing matched up to here, match with the last value
+  if(rxBwInt <= 30760) {
+    *val = rxBwRaw[sizeof(rxBwRaw) - 1];
+    return(RADIOLIB_ERR_NONE);
+  }
+
+  return(RADIOLIB_ERR_INVALID_RX_BANDWIDTH);
+}
+
 int16_t LR2021::setRxBandwidth(float rxBw) {
   // check active modem
   uint8_t type = RADIOLIB_LR2021_PACKET_TYPE_NONE;
@@ -510,66 +571,8 @@ int16_t LR2021::setRxBandwidth(float rxBw) {
     return(RADIOLIB_ERR_WRONG_MODEM);
   }
 
-  // check allowed receiver bandwidth values
-  if(fabsf(rxBw - 4.8f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_4_8;
-  } else if(fabsf(rxBw - 5.8f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_5_8;
-  } else if(fabsf(rxBw - 7.4f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_7_4;
-  } else if(fabsf(rxBw - 9.7f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_9_7;
-  } else if(fabsf(rxBw - 12.0f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_12_0;
-  } else if(fabsf(rxBw - 14.9f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_14_9;
-  } else if(fabsf(rxBw - 19.2f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_19_2;
-  } else if(fabsf(rxBw - 23.1f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_23_1;
-  } else if(fabsf(rxBw - 29.8f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_29_8;
-  } else if(fabsf(rxBw - 38.5f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_38_5;
-  } else if(fabsf(rxBw - 46.3f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_46_3;
-  } else if(fabsf(rxBw - 59.5f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_59_5;
-  } else if(fabsf(rxBw - 76.9f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_76_9;
-  } else if(fabsf(rxBw - 92.6f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_92_6;
-  } else if(fabsf(rxBw - 119.0f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_119_0;
-  } else if(fabsf(rxBw - 153.8f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_153_8;
-  } else if(fabsf(rxBw - 185.2f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_185_2;
-  } else if(fabsf(rxBw - 238.1f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_238_1;
-  } else if(fabsf(rxBw - 307.7f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_307_7;
-  } else if(fabsf(rxBw - 370.4f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_370_4;
-  } else if(fabsf(rxBw - 476.2f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_476_2;
-  } else if(fabsf(rxBw - 555.6f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_555_6;
-  } else if(fabsf(rxBw - 666.7f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_666_7;
-  } else if(fabsf(rxBw - 769.2f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_769_2;
-  } else if(fabsf(rxBw - 1111.0f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_1111;
-  } else if(fabsf(rxBw - 2222.0f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_2222;
-  } else if(fabsf(rxBw - 2666.0f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_2666;
-  } else if(fabsf(rxBw - 3076.0f) <= 0.001f) {
-    this->rxBandwidth = RADIOLIB_LR2021_GFSK_OOK_RX_BW_3076;
-  } else {
-    return(RADIOLIB_ERR_INVALID_RX_BANDWIDTH);
-  }
+  state = findRxBw(rxBw, &this->rxBandwidth);
+  RADIOLIB_ASSERT(state);
 
   // update modulation parameters
   if(type == RADIOLIB_LR2021_PACKET_TYPE_GFSK) {
@@ -700,7 +703,7 @@ int16_t LR2021::setWhitening(bool enabled, uint16_t initial) {
         RADIOLIB_ASSERT(state);
       }
       this->whitening = enabled;
-      return(setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, true, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening));
+      return(setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, false, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening));
     
     case(RADIOLIB_LR2021_PACKET_TYPE_OOK):
       this->whitening = enabled;
@@ -834,7 +837,7 @@ int16_t LR2021::setPacketMode(uint8_t mode, uint8_t len) {
   RADIOLIB_ASSERT(state);
   if(type == RADIOLIB_LR2021_PACKET_TYPE_GFSK) {
     // set requested packet mode
-    state = setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, true, this->addrComp, this->packetType, len, this->crcTypeGFSK, this->whitening);
+    state = setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, false, this->addrComp, this->packetType, len, this->crcTypeGFSK, this->whitening);
     RADIOLIB_ASSERT(state);
 
     // update cached value
@@ -900,7 +903,7 @@ int16_t LR2021::setNodeAddress(uint8_t nodeAddr) {
 
   // enable address filtering (node only)
   this->addrComp = RADIOLIB_LR2021_GFSK_OOK_ADDR_FILT_NODE;
-  state = setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, true, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening);
+  state = setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, false, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening);
   RADIOLIB_ASSERT(state);
 
   // set node address
@@ -919,7 +922,7 @@ int16_t LR2021::setBroadcastAddress(uint8_t broadAddr) {
 
   // enable address filtering (node and broadcast)
   this->addrComp = RADIOLIB_LR2021_GFSK_OOK_ADDR_FILT_NODE_BROADCAST;
-  state = setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, true, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening);
+  state = setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, false, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening);
   RADIOLIB_ASSERT(state);
 
   // set node and broadcast address
@@ -937,7 +940,7 @@ int16_t LR2021::disableAddressFiltering() {
 
   // disable address filtering
   this->addrComp = RADIOLIB_LR2021_GFSK_OOK_ADDR_FILT_DISABLED;
-  return(setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, true, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening));
+  return(setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, false, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening));
 }
 
 int16_t LR2021::ookDetector(uint16_t pattern, uint8_t len, uint8_t repeats, bool syncRaw, bool rising, uint8_t sofLen) {

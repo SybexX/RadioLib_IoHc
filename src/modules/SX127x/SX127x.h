@@ -654,6 +654,13 @@ class SX127x: public PhysicalLayer {
     int16_t scanChannel() override;
 
     /*!
+      \brief Performs scan for LoRa transmission in the current channel. Detects both preamble and payload.
+      \param config Ignored. Implemented only for PhysicalLayer compatibility.
+      \returns \ref status_codes
+    */
+    int16_t scanChannel(const ChannelScanConfig_t &config) override;
+
+    /*!
       \brief Sets the %LoRa module to sleep to save power. %Module will not be able to transmit or receive any data while in sleep mode.
       %Module will wake up automatically when methods like transmit or receive are called.
       \returns \ref status_codes
@@ -838,6 +845,14 @@ class SX127x: public PhysicalLayer {
     int16_t startChannelScan() override;
 
     /*!
+      \brief Interrupt-driven channel activity detection method. DIO1 will be activated
+      when LoRa preamble is detected, or upon timeout.
+      \param config Ignored. Implemented only for PhysicalLayer compatibility.
+      \returns \ref status_codes
+    */
+    int16_t startChannelScan(const ChannelScanConfig_t &config) override;
+
+    /*!
       \brief Read the channel scan result.
       \returns \ref status_codes
     */
@@ -891,12 +906,6 @@ class SX127x: public PhysicalLayer {
       \returns Last packet signal-to-noise ratio (SNR).
     */
     float getSNR() override;
-
-    /*!
-      \brief Get data rate of the latest transmitted packet.
-      \returns Last packet data rate in bps (bits per second).
-    */
-    float getDataRate() const;
 
     /*!
       \brief Sets FSK frequency deviation from carrier frequency. Allowed values depend on bit rate setting and must be lower than 200 kHz. Only available in FSK mode.
@@ -1221,7 +1230,7 @@ class SX127x: public PhysicalLayer {
       \param value The value that indicates which function to place on that pin. See chip datasheet for details.
       \returns \ref status_codes
     */
-    int16_t setDIOMapping(uint32_t pin, uint32_t value) override;
+    int16_t setDIOMapping(uint32_t pin, uint32_t value);
 
     /*!
       \brief Configure DIO mapping to use RSSI or Preamble Detect for pins that support it.
@@ -1256,8 +1265,8 @@ class SX127x: public PhysicalLayer {
   protected:
 #endif
     float frequency = 0;
-    float bandwidth = 0;
-    uint8_t spreadingFactor = 0;
+    float bandwidth = 125;
+    uint8_t spreadingFactor = 9;
     size_t packetLength = 0;
     uint8_t codingRate = 0;
     bool crcEnabled = false;
@@ -1280,7 +1289,6 @@ class SX127x: public PhysicalLayer {
 
     float bitRate = 0, frequencyDev = 0;
     bool crcOn = true; // default value used in FSK mode
-    float dataRate = 0;
     bool packetLengthQueried = false; // FSK packet length is the first byte in FIFO, length can only be queried once
     uint8_t packetLengthConfig = RADIOLIB_SX127X_PACKET_VARIABLE;
     uint8_t rxMode = RADIOLIB_SX127X_RXCONTINUOUS;

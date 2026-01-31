@@ -253,10 +253,6 @@ int16_t LR2021::transmit(const uint8_t* data, size_t len, uint8_t addr) {
       return(RADIOLIB_ERR_TX_TIMEOUT);
     }
   }
-  RadioLibTime_t elapsed = this->mod->hal->micros() - start;
-
-  // update data rate
-  this->dataRateMeasured = (len*8.0f)/((float)elapsed/1000000.0f);
 
   return(finishTransmit());
 }
@@ -898,7 +894,7 @@ int16_t LR2021::stageMode(RadioModeType_t mode, RadioModeConfig_t* cfg) {
         state = setLoRaPacketParams(this->preambleLengthLoRa, this->headerType, cfg->transmit.len, this->crcTypeLoRa, this->invertIQEnabled);
       
       } else if(modem == RADIOLIB_LR2021_PACKET_TYPE_GFSK) {
-        state = setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, true, this->addrComp, this->packetType, cfg->transmit.len, this->crcTypeGFSK, this->whitening);
+        state = setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, false, this->addrComp, this->packetType, cfg->transmit.len, this->crcTypeGFSK, this->whitening);
 
       } else if(modem == RADIOLIB_LR2021_PACKET_TYPE_OOK) {
         state = setOokPacketParams(this->preambleLengthGFSK, this->addrComp, this->packetType, cfg->transmit.len, this->crcTypeGFSK, this->whitening);
