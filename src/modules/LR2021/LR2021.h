@@ -435,14 +435,14 @@ class LR2021: public LRxxxx {
     int16_t invertIQ(bool enable) override;
 
     /*!
-      \brief Sets GFSK bit rate. Allowed values range from 0.6 to 300.0 kbps.
+      \brief Sets GFSK bit rate. Allowed values range from 0.5 to 2000.0 kbps.
       \param br FSK bit rate to be set in kbps.
       \returns \ref status_codes
     */
     int16_t setBitRate(float br) override;
 
     /*!
-      \brief Sets GFSK frequency deviation. Allowed values range from 0.0 to 200.0 kHz.
+      \brief Sets GFSK frequency deviation. Allowed values range from 0.6 to 500.0 kHz.
       \param freqDev GFSK frequency deviation to be set in kHz.
       \returns \ref status_codes
     */
@@ -688,7 +688,6 @@ class LR2021: public LRxxxx {
     int16_t config(uint8_t modem);
     int16_t setPacketMode(uint8_t mode, uint8_t len);
     int16_t startCad(uint8_t symbolNum, uint8_t detPeak, uint8_t detMin, uint8_t exitMode, RadioLibTime_t timeout);
-    int16_t findRxBw(float rxBw, uint8_t* val);
 
     // chip control commands
     int16_t readRadioRxFifo(uint8_t* data, size_t len);

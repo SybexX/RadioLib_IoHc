@@ -379,7 +379,7 @@ int16_t LR2021::setCRC(uint8_t len, uint32_t initial, uint32_t polynomial, bool 
     }
 
     this->crcTypeGFSK = len;
-    if(inverted) {
+    if((this->crcTypeGFSK != RADIOLIB_LR2021_GFSK_OOK_CRC_OFF) && inverted) {
       this->crcTypeGFSK += 0x08;
     }
 
@@ -394,7 +394,7 @@ int16_t LR2021::setCRC(uint8_t len, uint32_t initial, uint32_t polynomial, bool 
     }
 
     this->crcTypeGFSK = len;
-    if(inverted) {
+    if((this->crcTypeGFSK != RADIOLIB_LR2021_GFSK_OOK_CRC_OFF) && inverted) {
       this->crcTypeGFSK += 0x08;
     }
 
@@ -435,14 +435,14 @@ int16_t LR2021::setBitRate(float br) {
   int16_t state = getPacketType(&type);
   RADIOLIB_ASSERT(state);
   if(type == RADIOLIB_LR2021_PACKET_TYPE_GFSK) {
-    RADIOLIB_CHECK_RANGE(br, 0.6f, 300.0f, RADIOLIB_ERR_INVALID_BIT_RATE);
+    RADIOLIB_CHECK_RANGE(br, 0.5f, 2000.0f, RADIOLIB_ERR_INVALID_BIT_RATE);
     //! \TODO: [LR2021] implement fractional bit rate configuration
     this->bitRate = br * 1000.0f;
     state = setGfskModulationParams(this->bitRate, this->pulseShape, this->rxBandwidth, this->frequencyDev);
     return(state);
   
   } else if(type == RADIOLIB_LR2021_PACKET_TYPE_OOK) {
-    RADIOLIB_CHECK_RANGE(br, 0.6f, 300.0f, RADIOLIB_ERR_INVALID_BIT_RATE);
+    RADIOLIB_CHECK_RANGE(br, 0.5f, 2000.0f, RADIOLIB_ERR_INVALID_BIT_RATE);
     //! \TODO: [LR2021] implement fractional bit rate configuration
     this->bitRate = br * 1000.0f;
     //! \TODO: [LR2021] implement OOK magnitude depth configuration
@@ -492,25 +492,27 @@ int16_t LR2021::setFrequencyDeviation(float freqDev) {
 
   // set frequency deviation to lowest available setting (required for digimodes)
   float newFreqDev = freqDev;
-  if(freqDev < 0.0f) {
+  if(freqDev < 0.6f) {
     newFreqDev = 0.6f;
   }
 
-  RADIOLIB_CHECK_RANGE(newFreqDev, 0.6f, 200.0f, RADIOLIB_ERR_INVALID_FREQUENCY_DEVIATION);
+  RADIOLIB_CHECK_RANGE(newFreqDev, 0.6f, 500.0f, RADIOLIB_ERR_INVALID_FREQUENCY_DEVIATION);
   this->frequencyDev = newFreqDev * 1000.0f;
   state = setGfskModulationParams(this->bitRate, this->pulseShape, this->rxBandwidth, this->frequencyDev);
   return(state);
 }
 
-int16_t LR2021::findRxBw(float rxBw, uint8_t* val) {
-  // lookup tables to avoid comparing a whole bunch of floats
-  uint16_t rxBwAvg[] = {
-    53, 66, 85, 108, 134, 170, 211, 264,
-    341, 424, 529, 682, 847, 1058, 1364,
-    1695, 2116, 2729, 3390, 4233, 5159,
-    6111, 7179, 9401, 16665, 24440, 28710,
-  };
-  uint8_t rxBwRaw[] = {
+int16_t LR2021::setRxBandwidth(float rxBw) {
+  // check active modem
+  uint8_t type = RADIOLIB_LR2021_PACKET_TYPE_NONE;
+  int16_t state = getPacketType(&type);
+  RADIOLIB_ASSERT(state);
+  if(!((type == RADIOLIB_LR2021_PACKET_TYPE_GFSK) || 
+       (type == RADIOLIB_LR2021_PACKET_TYPE_OOK))) {
+    return(RADIOLIB_ERR_WRONG_MODEM);
+  }
+
+  const uint8_t rxBwLut[] = {
     RADIOLIB_LR2021_GFSK_OOK_RX_BW_4_8,
     RADIOLIB_LR2021_GFSK_OOK_RX_BW_5_8,
     RADIOLIB_LR2021_GFSK_OOK_RX_BW_7_4,
@@ -541,37 +543,7 @@ int16_t LR2021::findRxBw(float rxBw, uint8_t* val) {
     RADIOLIB_LR2021_GFSK_OOK_RX_BW_3076,
   };
 
-  // iterate through the table and find whether the user-provided value
-  // is lower than the pre-computed average of the adjacent bandwidth values
-  // if it is, we consider that to be a match even though the actual value is not precise
-  uint16_t rxBwInt = rxBw*10.0f;
-  for(size_t i = 0; i < sizeof(rxBwAvg)/sizeof(rxBwAvg[0]); i++) {
-    if(rxBwInt < rxBwAvg[i]) {
-      *val = rxBwRaw[i];
-      return(RADIOLIB_ERR_NONE);
-    }
-  }
-
-  // if nothing matched up to here, match with the last value
-  if(rxBwInt <= 30760) {
-    *val = rxBwRaw[sizeof(rxBwRaw) - 1];
-    return(RADIOLIB_ERR_NONE);
-  }
-
-  return(RADIOLIB_ERR_INVALID_RX_BANDWIDTH);
-}
-
-int16_t LR2021::setRxBandwidth(float rxBw) {
-  // check active modem
-  uint8_t type = RADIOLIB_LR2021_PACKET_TYPE_NONE;
-  int16_t state = getPacketType(&type);
-  RADIOLIB_ASSERT(state);
-  if(!((type == RADIOLIB_LR2021_PACKET_TYPE_GFSK) || 
-       (type == RADIOLIB_LR2021_PACKET_TYPE_OOK))) {
-    return(RADIOLIB_ERR_WRONG_MODEM);
-  }
-
-  state = findRxBw(rxBw, &this->rxBandwidth);
+  state = findRxBw(rxBw, rxBwLut, sizeof(rxBwLut)/sizeof(rxBwLut[0]), 3076.0f, &this->rxBandwidth);
   RADIOLIB_ASSERT(state);
 
   // update modulation parameters
@@ -783,8 +755,8 @@ int16_t LR2021::checkDataRate(DataRate_t dr, ModemType_t modem) {
 
   // select interpretation based on modem
   if(modem == RADIOLIB_MODEM_FSK) {
-    RADIOLIB_CHECK_RANGE(dr.fsk.bitRate, 0.6f, 300.0f, RADIOLIB_ERR_INVALID_BIT_RATE);
-    RADIOLIB_CHECK_RANGE(dr.fsk.freqDev, 0.6f, 200.0f, RADIOLIB_ERR_INVALID_FREQUENCY_DEVIATION);
+    RADIOLIB_CHECK_RANGE(dr.fsk.bitRate, 0.5f, 2000.0f, RADIOLIB_ERR_INVALID_BIT_RATE);
+    RADIOLIB_CHECK_RANGE(dr.fsk.freqDev, 0.6f,  500.0f, RADIOLIB_ERR_INVALID_FREQUENCY_DEVIATION);
     return(RADIOLIB_ERR_NONE);
 
   } else if(modem == RADIOLIB_MODEM_LORA) {
