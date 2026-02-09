@@ -1,6 +1,7 @@
 #include "LR2021.h"
 
 #include "../LR11x0/LR_common.h"
+#include "LR2021_registers.h"
 
 #include <math.h>
 #include <string.h>
@@ -16,7 +17,7 @@ int16_t LR2021::setFrequency(float freq) {
 
 int16_t LR2021::setFrequency(float freq, bool skipCalibration) {
   #if RADIOLIB_CHECK_PARAMS
-  if(!(((freq >= 150.0f) && (freq <= 960.0f)) ||
+  if(!(((freq >= 150.0f) && (freq <= 1090.0f)) ||
     ((freq >= 1900.0f) && (freq <= 2200.0f)) ||
     ((freq >= 2400.0f) && (freq <= 2500.0f)))) {
       return(RADIOLIB_ERR_INVALID_FREQUENCY);
@@ -66,7 +67,7 @@ int16_t LR2021::setFrequency(float freq, bool skipCalibration) {
   state = setRfFrequency((uint32_t)(freq*1000000.0f));
   RADIOLIB_ASSERT(state);
   this->freqMHz = freq;
-  this->highFreq = (freq > 1000.0f);
+  this->highFreq = (freq > 1100.0f);
   return(state);
 }
 
@@ -386,7 +387,7 @@ int16_t LR2021::setCRC(uint8_t len, uint32_t initial, uint32_t polynomial, bool 
     state = setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, false, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening);
     RADIOLIB_ASSERT(state);
 
-    return(setGfskCrcParams(initial, polynomial));
+    return(setGfskCrcParams(polynomial, initial));
 
   } else if(type == RADIOLIB_LR2021_PACKET_TYPE_OOK) {
     if(len > 4) {
@@ -401,7 +402,7 @@ int16_t LR2021::setCRC(uint8_t len, uint32_t initial, uint32_t polynomial, bool 
     state = setOokPacketParams(this->preambleLengthGFSK, this->addrComp, this->packetType, RADIOLIB_LR2021_MAX_PACKET_LENGTH, this->crcTypeGFSK, this->whitening);
     RADIOLIB_ASSERT(state);
 
-    return(setOokCrcParams(initial, polynomial));
+    return(setOokCrcParams(polynomial, initial));
   
   } else if(type == RADIOLIB_LR2021_PACKET_TYPE_FLRC) {
     if((len == 1) || (len > 4)) {
@@ -556,7 +557,7 @@ int16_t LR2021::setRxBandwidth(float rxBw) {
 }
 
 int16_t LR2021::setSyncWord(uint8_t* syncWord, size_t len) {
-  if((!syncWord) || (!len) || (len > RADIOLIB_LR2021_GFSK_SYNC_WORD_LEN)) {
+  if(len > RADIOLIB_LR2021_GFSK_SYNC_WORD_LEN) {
     return(RADIOLIB_ERR_INVALID_SYNC_WORD);
   }
 
@@ -650,7 +651,34 @@ int16_t LR2021::setDataShaping(uint8_t sh) {
 }
 
 int16_t LR2021::setEncoding(uint8_t encoding) {
-  return(setWhitening(encoding));
+  // check active modem
+  uint8_t type = RADIOLIB_LR2021_PACKET_TYPE_NONE;
+  int16_t state = getPacketType(&type);
+  RADIOLIB_ASSERT(state);
+
+  switch(type) {
+    case(RADIOLIB_LR2021_PACKET_TYPE_GFSK):
+      return(setWhitening(encoding == RADIOLIB_ENCODING_WHITENING));
+    
+    case(RADIOLIB_LR2021_PACKET_TYPE_OOK):
+      switch(encoding) {
+        case(RADIOLIB_ENCODING_NRZ):
+        case(RADIOLIB_ENCODING_WHITENING):
+          return(setWhitening(encoding == RADIOLIB_ENCODING_WHITENING));
+        case(RADIOLIB_ENCODING_MANCHESTER):
+        case(RADIOLIB_ENCODING_MANCHESTER_INV):
+          state = setWhitening(false);
+          this->whitening = encoding;
+          return(state);
+        default:
+          return(RADIOLIB_ERR_INVALID_ENCODING);
+      }
+    
+    default:
+      return(RADIOLIB_ERR_WRONG_MODEM);
+  }
+
+  return(state);
 }
 
 int16_t LR2021::fixedPacketLengthMode(uint8_t len) {
@@ -809,7 +837,7 @@ int16_t LR2021::setPacketMode(uint8_t mode, uint8_t len) {
   RADIOLIB_ASSERT(state);
   if(type == RADIOLIB_LR2021_PACKET_TYPE_GFSK) {
     // set requested packet mode
-    state = setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, false, this->addrComp, this->packetType, len, this->crcTypeGFSK, this->whitening);
+    state = setGfskPacketParams(this->preambleLengthGFSK, this->preambleDetLength, false, false, this->addrComp, mode, len, this->crcTypeGFSK, this->whitening);
     RADIOLIB_ASSERT(state);
 
     // update cached value
@@ -818,7 +846,7 @@ int16_t LR2021::setPacketMode(uint8_t mode, uint8_t len) {
   
   } else if(type == RADIOLIB_LR2021_PACKET_TYPE_OOK) {
     // set requested packet mode
-    state = setOokPacketParams(this->preambleLengthGFSK, this->addrComp, this->packetType, len, this->crcTypeGFSK, this->whitening);
+    state = setOokPacketParams(this->preambleLengthGFSK, this->addrComp, mode, len, this->crcTypeGFSK, this->whitening);
     RADIOLIB_ASSERT(state);
 
     // update cached value
@@ -927,6 +955,11 @@ int16_t LR2021::ookDetector(uint16_t pattern, uint8_t len, uint8_t repeats, bool
   return(setOokDetector(pattern, len - 1, repeats, syncRaw, rising, sofLen));
 }
 
+int16_t LR2021::setOokDetectionThreshold(int16_t level) {
+  int16_t levelRaw = 64 + level;
+  return(this->writeRegMemMask32(RADIOLIB_LR2021_REG_OOK_DETECTION_THRESHOLD, (0x7FUL << 20), (uint32_t)levelRaw << 20));
+}
+
 int16_t LR2021::setSideDetector(const LR2021LoRaSideDetector_t* cfg, size_t numDetectors) {
   // some basic sanity checks
   if((cfg == nullptr) || (numDetectors == 0)) {
@@ -996,6 +1029,13 @@ int16_t LR2021::setSideDetector(const LR2021LoRaSideDetector_t* cfg, size_t numD
   RADIOLIB_ASSERT(state);
 
   return(setLoRaSideDetSyncword(syncWords, numDetectors));
+}
+
+int16_t LR2021::setGain(uint8_t gain) {
+  if(gain > 13) {
+    return(RADIOLIB_ERR_INVALID_GAIN);
+  }
+  return(this->SPIcommand(RADIOLIB_LR2021_CMD_SET_AGC_GAIN_MANUAL, true, &gain, sizeof(gain)));
 }
 
 #endif

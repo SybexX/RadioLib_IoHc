@@ -604,9 +604,10 @@ class LR2021: public LRxxxx {
     /*!
       \brief Gets RSSI (Recorded Signal Strength Indicator).
       \param packet Whether to read last packet RSSI, or the current value.
+      \param skipReceive Set to true to skip putting radio in receive mode for the RSSI measurement in FSK/OOK mode.
       \returns RSSI value in dBm.
     */
-    float getRSSI(bool packet);
+    float getRSSI(bool packet, bool skipReceive = false);
 
     /*!
       \brief Gets SNR (Signal to Noise Ratio) of the last received packet. Only available for LoRa modem.
@@ -638,12 +639,19 @@ class LR2021: public LRxxxx {
       \param pattern Preamble pattern, should end with 01 or 10 (binary).
       \param len Preamble pattern length in bits.
       \param repeats Number of preamble repeats, maximum of 31.
-      \param syncRaw Whether the sync word is send raw (unencoded) or encoded. Set to true for encoded sync word.
+      \param syncRaw Whether the sync word is send raw (unencoded) or encoded. Set to false for encoded sync word.
       \param rising Whether the start of frame delimiter edge is rising (true) or falling (false).
       \param sofLen Start-of-frame length in bits.
       \returns \ref status_codes
     */
     int16_t ookDetector(uint16_t pattern = 0x0285, uint8_t len = 16, uint8_t repeats = 0, bool syncRaw = false, bool rising = false, uint8_t sofLen = 0);
+    
+    /*!
+      \brief Set OOK detection threshold.
+      \param level Threshold level in dB
+      \returns \ref status_codes
+    */
+    int16_t setOokDetectionThreshold(int16_t level);
 
     /*!
       \brief Configure LoRa side detector, which enables to detect mutiple spreading factors and receive one of them.
@@ -660,6 +668,14 @@ class LR2021: public LRxxxx {
       \returns \ref status_codes
     */
     int16_t setSideDetector(const LR2021LoRaSideDetector_t* cfg, size_t numDetectors);
+
+    /*!
+      \brief Sets gain of receiver LNA (low-noise amplifier). Can be set to any integer in range 1 to 13,
+      where 13 is the highest gain. Set to 0 to enable automatic gain control (recommended).
+      \param gain Gain of receiver LNA (low-noise amplifier) to be set.
+      \returns \ref status_codes
+    */
+    int16_t setGain(uint8_t gain);
 
 #if !RADIOLIB_GODMODE && !RADIOLIB_LOW_LEVEL
   protected:
@@ -742,7 +758,6 @@ class LR2021: public LRxxxx {
     int16_t getTimestampValue(uint8_t index, uint32_t* timestamp);
     int16_t setCca(uint32_t duration, uint8_t gain);
     int16_t getCcaResult(float* rssiMin, float* rssiMax, float* rssiAvg);
-    int16_t setAgcGainManual(uint8_t gain);
     int16_t setCadParams(uint32_t cadTimeout, uint8_t threshold, uint8_t exitMode, uint32_t trxTimeout);
     int16_t setCad(void);
     int16_t selPa(uint8_t pa);
