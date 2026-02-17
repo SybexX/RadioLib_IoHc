@@ -392,7 +392,7 @@ void LoRaWANNode::createSession() {
     if(this->band->bandType == RADIOLIB_LORAWAN_BAND_DYNAMIC) {
       drUp = (this->band->txFreqs[0].drMin + this->band->txFreqs[0].drMax + 1) / 2;
     } else {                // RADIOLIB_LORAWAN_BAND_FIXED
-      drUp = (this->band->txSpans[0].drMin + this->band->txSpans[0].drMin + 1) / 2;
+      drUp = (this->band->txSpans[0].drMin + this->band->txSpans[0].drMax + 1) / 2;
     }
   }
   uint8_t txSteps = this->txPowerSteps;
@@ -1157,7 +1157,7 @@ int16_t LoRaWANNode::startMulticastSession(uint8_t cls, uint32_t mcAddr, const u
   if(mcDr == RADIOLIB_LORAWAN_DATA_RATE_UNUSED) {
     mcDr = this->channels[RADIOLIB_LORAWAN_RX2].dr;
   }
-  if(this->band->dataRates[mcDr].modem != RADIOLIB_MODEM_NONE) {
+  if(this->band->dataRates[mcDr].modem == RADIOLIB_MODEM_NONE) {
     return(RADIOLIB_ERR_INVALID_DATA_RATE);
   }
 
@@ -3197,6 +3197,18 @@ void LoRaWANNode::setDeviceStatus(uint8_t battLevel) {
 
 void LoRaWANNode::scheduleTransmission(RadioLibTime_t tUplink) {
   this->tUplink = tUplink;
+}
+
+const LoRaWANBand_t* LoRaWANNode::getBand() {
+  return(this->band);
+}
+
+uint8_t LoRaWANNode::getClass() {
+  return(this->lwClass);
+}
+
+uint8_t LoRaWANNode::getVersionMajor() {
+  return(this->rev);
 }
 
 // return fCnt of last uplink; also return 0 if no uplink occured yet

@@ -858,6 +858,24 @@ class LoRaWANNode {
     void scheduleTransmission(RadioLibTime_t tUplink);
 
     /*! 
+      \brief Get the LoRaWAN band used by this node.
+      \returns Pointer to the used band.
+    */
+    const LoRaWANBand_t* getBand();
+
+    /*! 
+      \brief Get the LoRaWAN class of this node.
+      \returns Class type (RADIOLIB_LORAWAN_CLASS_*).
+    */
+    uint8_t getClass();
+
+    /*! 
+      \brief Get the LoRaWAN version of this node.
+      \returns Version major number (0 for LoRaWAN 1.0.x, 1 for LoRaWAN 1.1).
+    */
+    uint8_t getVersionMajor();
+
+    /*! 
         \brief Returns the last uplink's frame counter; 
         also 0 if no uplink occured yet. 
     */
