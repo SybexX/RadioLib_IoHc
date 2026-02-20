@@ -238,6 +238,7 @@
 #define RADIOLIB_LR2021_CALIBRATE_FE_LF_PATH                    (0x00UL << 15)  // 15    15     calibration path: low-frequency
 #define RADIOLIB_LR2021_CALIBRATE_FE_HF_PATH                    (0x01UL << 15)  // 15    15                       high-frequency
 #define RADIOLIB_LR2021_CAL_IMG_FREQ_TRIG_MHZ                   (20.0f)
+#define RADIOLIB_LR2021_LF_CUTOFF_FREQ                          (1500.0f)
 
 // RADIOLIB_LR2021_CMD_GET_V_BAT
 #define RADIOLIB_LR2021_VBAT_FORMAT_RAW                         (0x00UL << 3)   //  3     3     readout format: raw
@@ -513,7 +514,7 @@
 // RADIOLIB_LR2021_CMD_SET_OOK_PACKET_PARAMS
 #define RADIOLIB_LR2021_OOK_MANCHESTER_OFF                      (0x00UL << 0)   //  3     0     Manchester encoding: disabled
 #define RADIOLIB_LR2021_OOK_MANCHESTER_ON                       (0x01UL << 0)   //  3     0                          enabled
-#define RADIOLIB_LR2021_OOK_MANCHESTER_ON_INV                   (0x03UL << 0)   //  3     0                          enabled, inverted
+#define RADIOLIB_LR2021_OOK_MANCHESTER_ON_INV                   (0x09UL << 0)   //  3     0                          enabled, inverted
 
 // RADIOLIB_LR2021_CMD_SET_TX_TEST_MODE
 #define RADIOLIB_LR2021_TX_TEST_MODE_NORMAL_TX                  (0x00UL << 0)   //  7     0     Tx test mode: normal
