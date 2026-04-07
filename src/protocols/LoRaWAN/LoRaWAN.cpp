@@ -111,8 +111,8 @@ int16_t LoRaWANNode::sendReceive(const uint8_t* dataUp, size_t lenUp, uint8_t fP
   // the first 16 bytes are reserved for MIC calculation blocks
   size_t uplinkMsgLen = RADIOLIB_LORAWAN_FRAME_LEN(lenUp, this->fOptsUpLen);
   #if RADIOLIB_STATIC_ONLY
-  uint8_t uplinkMsg[RADIOLIB_STATIC_ARRAY_SIZE];
-  uint8_t frmPayload[RADIOLIB_STATIC_ARRAY_SIZE];
+  uint8_t uplinkMsg[RADIOLIB_AES128_BLOCK_SIZE + RADIOLIB_STATIC_ARRAY_SIZE];
+  uint8_t frmPayload[RADIOLIB_AES128_BLOCK_SIZE + RADIOLIB_STATIC_ARRAY_SIZE];
   #else
   uint8_t* uplinkMsg = new uint8_t[uplinkMsgLen];
   uint8_t* frmPayload = new uint8_t[lenUp + this->fOptsUpLen];
@@ -2033,7 +2033,7 @@ int16_t LoRaWANNode::parseDownlink(uint8_t* data, size_t* len, uint8_t window, L
   bool isConfirmedDown = false;
 
   // do some housekeeping for normal Class A downlinks (not allowed for Class B/C)
-  if(window < RADIOLIB_LORAWAN_RX_BC) {
+  if(this->lwClass == RADIOLIB_LORAWAN_CLASS_A || window < RADIOLIB_LORAWAN_RX_BC) {
     // if this is a confirmed frame, save the downlink number (only app frames can be confirmed)
     if((downlinkMsg[RADIOLIB_LORAWAN_FHDR_LEN_START_OFFS] & 0xFE) == RADIOLIB_LORAWAN_MHDR_MTYPE_CONF_DATA_DOWN) {
       this->confFCntDown = this->aFCntDown;
