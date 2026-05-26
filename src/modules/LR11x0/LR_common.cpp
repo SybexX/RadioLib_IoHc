@@ -4,7 +4,6 @@
 
 LRxxxx::LRxxxx(Module* mod) : PhysicalLayer() {
   this->mod = mod;
-  this->XTAL = false;
   this->mod->spiConfig.stream = true;
   this->mod->spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_CMD] = Module::BITS_16;
   this->mod->spiConfig.statusPos = 0;
@@ -313,7 +312,7 @@ int16_t LRxxxx::findRxBw(float rxBw, const uint8_t* lut, size_t lutSize, float r
   // is lower than the pre-computed average of the adjacent bandwidth values
   // if it is, we consider that to be a match even though the actual value is not precise
   uint16_t rxBwInt = rxBw*10.0f;
-  for(size_t i = 0; i < lutSize; i++) {
+  for(size_t i = 0; i < (lutSize - 1); i++) {
     if(rxBwInt < rxBwAvg[i]) {
       *val = lut[i];
       return(RADIOLIB_ERR_NONE);
