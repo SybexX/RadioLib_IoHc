@@ -297,7 +297,7 @@ int16_t SX126x::setDataRate(DataRate_t dr, ModemType_t modem) {
     RADIOLIB_ASSERT(state);
 
     // set hopping grid
-    this->lrFhssGridNonFcc = dr.lrFhss.narrowGrid ? RADIOLIB_SX126X_LR_FHSS_GRID_STEP_NON_FCC : RADIOLIB_SX126X_LR_FHSS_GRID_STEP_FCC;
+    this->lrFhssGridNonFcc = dr.lrFhss.narrowGrid;
 
   }
 
@@ -736,6 +736,10 @@ int16_t SX126x::setOutputPower(int8_t power, uint8_t paDutyCycle, uint8_t hpMax,
 
   // restore OCP configuration
   return(writeRegister(RADIOLIB_SX126X_REG_OCP_CONFIGURATION, &ocp, 1));
+}
+
+void SX126x::setPaTable(SX126x::paTableEntry_t* table) {
+  this->paOptTable = table;
 }
 
 int16_t SX126x::setPacketMode(uint8_t mode, uint8_t len) {
