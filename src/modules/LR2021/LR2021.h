@@ -248,13 +248,17 @@ class LR2021: public LRxxxx {
 
     /*!
       \brief Performs scan for LoRa transmission in the current channel. Detects both preamble and payload.
-      \param config CAD configuration structure.
+      \param config CAD configuration structure. Its exitMode must be one of
+      RADIOLIB_LR2021_LORA_CAD_EXIT_MODE_FALLBACK, RADIOLIB_LR2021_LORA_CAD_EXIT_MODE_RX or
+      RADIOLIB_LR2021_LORA_CAD_EXIT_MODE_LBT - the RADIOLIB_LR2021_CAD_EXIT_MODE_* values belong to the
+      RSSI-based CAD and are not valid here.
       \returns \ref status_codes
     */
     int16_t scanChannel(const ChannelScanConfig_t &config) override;
 
     /*!
-      \brief Sets the module to standby mode (overload for PhysicalLayer compatibility, uses 13 MHz RC oscillator).
+      \brief Sets the module to standby mode (overload for PhysicalLayer compatibility).
+      Uses 13 MHz RC oscillator by default, or external oscillator if \ref standbyXOSC is set to true.
       \returns \ref status_codes
     */
     int16_t standby() override;
@@ -467,6 +471,14 @@ class LR2021: public LRxxxx {
       or the high-frequency 2.4 GHz PA (true).
     */
     void setPaTable(LR2021PaTableEntry_t* table, bool highFreq);
+
+    /*!
+      \brief Set standby mode to be used. XOSC standby uses more power, but allows faster switching
+      between Rx and Tx modes.
+      \param enable Set to true for XOSC standby, false for RC standby.
+      \returns \ref status_codes
+    */
+    int16_t setStandbyXOSC(bool enable);
 
     /*!
       \brief Check if output power is configurable.
@@ -709,6 +721,12 @@ class LR2021: public LRxxxx {
     /*! \copydoc PhysicalLayer::launchMode */
     int16_t launchMode() override;
 
+    /*! \copydoc PhysicalLayer::writeTxBuffer */
+    int16_t writeTxBuffer(const uint8_t* data, size_t len) override;
+
+    /*! \copydoc PhysicalLayer::clearTxBuffer */
+    int16_t clearTxBuffer() override;
+
     /*!
       \brief Read the supply voltage on the Vbat pin.
       \param bits Measurement resolution in bits, 8 to 13.
@@ -898,6 +916,19 @@ class LR2021: public LRxxxx {
       \returns \ref status_codes
     */
     int16_t getOokRxStats(uint16_t* packetRx, uint16_t* crcError, uint16_t* lenError);
+
+    /*!
+      \brief Set regulator mode to LDO.
+      \returns \ref status_codes
+    */
+    int16_t setRegulatorLDO();
+
+    /*!
+      \brief Set regulator mode to DC-DC.
+      \returns \ref status_codes
+    */
+    int16_t setRegulatorDCDC();
+   
     
 #if !RADIOLIB_GODMODE && !RADIOLIB_LOW_LEVEL
   protected:
@@ -913,6 +944,8 @@ class LR2021: public LRxxxx {
 #endif
     uint8_t gainModeLf = RADIOLIB_LR2021_RX_BOOST_LF;
     uint8_t gainModeHf = RADIOLIB_LR2021_RX_BOOST_HF;
+
+    bool standbyXOSC = false;
 
     // cached FLRC parameters
     uint16_t bitRateFlrc = 0;
@@ -943,7 +976,7 @@ class LR2021: public LRxxxx {
     int16_t getRxPktLength(uint16_t* len);
     int16_t resetRxStats(void);
     int16_t setDefaultRxTxTimeout(uint32_t rxTimeout, uint32_t txTimeout);
-    int16_t setRegMode(uint8_t simoUsage, const uint8_t rampTimes[4]);
+    int16_t setRegMode(uint8_t mode);
     int16_t calibrate(uint8_t blocks);
     int16_t calibrateFrontEnd(const uint16_t freq[3]);
     int16_t getVbat(uint8_t resolution, uint16_t* vbat);
@@ -1057,8 +1090,11 @@ class LR2021: public LRxxxx {
 
     // test commands
     int16_t setTxTestMode(uint8_t mode);
-};
 
+    // port of semtech's workaround
+    int16_t setDCDCworkaround();
+    int16_t resetDCDCworkaround();
+};
 #endif
 
 #endif

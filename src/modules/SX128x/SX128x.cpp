@@ -240,7 +240,9 @@ int16_t SX128x::reset(bool verify) {
   RadioLibTime_t start = this->mod->hal->millis();
   while(true) {
     // try to set mode to standby
-    int16_t state = standby();
+    // force usage of RC standby here - if this is being called during startup,
+    // and user set standbyXOSC to true with TCXO, this would attempt to use the TCXO
+    int16_t state = standby(RADIOLIB_SX128X_STANDBY_RC);
     if(state == RADIOLIB_ERR_NONE) {
       // standby command successful
       return(RADIOLIB_ERR_NONE);
@@ -310,27 +312,28 @@ int16_t SX128x::receive(uint8_t* data, size_t len, RadioLibTime_t timeout) {
   int16_t state = standby();
   RADIOLIB_ASSERT(state);
 
-  // calculate timeout (1000% of expected time-on-air)
-  // for most other modules, it is 500%, however, the overall datarates of SX128x are higher
-  // so we use higher value for the default timeout
   RadioLibTime_t timeoutInternal = timeout;
   if(!timeoutInternal) {
-    timeoutInternal = getTimeOnAir(len) * 10;
+    // calculate timeout (500 % of expected time-one-air)
+    size_t maxLen = len;
+    if(len == 0) { maxLen = RADIOLIB_SX128X_MAX_PACKET_LENGTH; }
+    timeoutInternal = (getTimeOnAir(maxLen) * 5) / 1000;
   }
-  RADIOLIB_DEBUG_BASIC_PRINTLN("Timeout in %lu ms", (uint32_t)((timeout + 999) / 1000));
+
+  RADIOLIB_DEBUG_BASIC_PRINTLN("Timeout in %lu ms", timeoutInternal);
 
   // start reception
-  uint32_t timeoutValue = (uint32_t)((float)timeoutInternal / 15.625f);
+  uint32_t timeoutValue = timeoutInternal / 4UL;
   state = startReceive(timeoutValue);
   RADIOLIB_ASSERT(state);
 
   // wait for packet reception or timeout
   bool softTimeout = false;
-  RadioLibTime_t start = this->mod->hal->micros();
+  RadioLibTime_t start = this->mod->hal->millis();
   while(!this->mod->hal->digitalRead(this->mod->getIrq())) {
     this->mod->hal->yield();
     // safety check, the timeout should be done by the radio
-    if(this->mod->hal->micros() - start > timeout) {
+    if(this->mod->hal->millis() - start > timeoutInternal) {
       softTimeout = true;
       break;
     }
@@ -427,7 +430,7 @@ int16_t SX128x::sleep(bool retainConfig) {
 }
 
 int16_t SX128x::standby() {
-  return(SX128x::standby(RADIOLIB_SX128X_STANDBY_RC));
+  return(SX128x::standby(this->standbyXOSC ? RADIOLIB_SX128X_STANDBY_XOSC : RADIOLIB_SX128X_STANDBY_RC));
 }
 
 int16_t SX128x::standby(uint8_t mode) {
@@ -1459,6 +1462,15 @@ void SX128x::setRfSwitchTable(const uint32_t (&pins)[Module::RFSWITCH_MAX_PINS],
   this->mod->setRfSwitchTable(pins, table);
 }
 
+int16_t SX128x::setStandbyXOSC(bool enable) {
+  // set the internal variable
+  this->standbyXOSC = enable;
+
+  // call standby to start the oscillator
+  int16_t state = this->standbyXOSC ? standby(RADIOLIB_SX128X_STANDBY_XOSC) : standby(RADIOLIB_SX128X_STANDBY_RC);
+  return state;
+}
+
 uint8_t SX128x::randomByte() {
   // it's unclear whether SX128x can measure RSSI while not receiving a packet
   // this method is implemented only for PhysicalLayer compatibility
@@ -1550,13 +1562,15 @@ int16_t SX128x::stageMode(RadioModeType_t mode, RadioModeConfig_t* cfg) {
       state = setBufferBaseAddress();
       RADIOLIB_ASSERT(state);
 
-      // write packet to buffer
-      if(modem == RADIOLIB_SX128X_PACKET_TYPE_BLE) {
-        // first 2 bytes of BLE payload are PDU header
-        state = writeBuffer(cfg->transmit.data, cfg->transmit.len, 2);
-        RADIOLIB_ASSERT(state);
-      } else {
-        state = writeBuffer(cfg->transmit.data, cfg->transmit.len);
+      // write packet to buffer - unless the caller already did that with writeTxBuffer,
+      // which it signals by leaving the payload pointer empty
+      if(cfg->transmit.data != NULL) {
+        if(modem == RADIOLIB_SX128X_PACKET_TYPE_BLE) {
+          // first 2 bytes of BLE payload are PDU header
+          state = writeBuffer(cfg->transmit.data, cfg->transmit.len, 2);
+        } else {
+          state = writeBuffer(cfg->transmit.data, cfg->transmit.len);
+        }
         RADIOLIB_ASSERT(state);
       }
 
@@ -1575,6 +1589,28 @@ int16_t SX128x::stageMode(RadioModeType_t mode, RadioModeConfig_t* cfg) {
 
   this->stagedMode = mode;
   return(state);
+}
+
+int16_t SX128x::writeTxBuffer(const uint8_t* data, size_t len) {
+  if(data == NULL) {
+    return(RADIOLIB_ERR_NULL_POINTER);
+  }
+  if(len > RADIOLIB_SX128X_MAX_PACKET_LENGTH) {
+    return(RADIOLIB_ERR_PACKET_TOO_LONG);
+  }
+
+  // set buffer pointers
+  int16_t state = setBufferBaseAddress();
+  RADIOLIB_ASSERT(state);
+
+  // first 2 bytes of BLE payload are PDU header
+  const uint8_t offset = (getPacketType() == RADIOLIB_SX128X_PACKET_TYPE_BLE) ? 2 : 0;
+  return(writeBuffer(data, (uint8_t)len, offset));
+}
+
+int16_t SX128x::clearTxBuffer() {
+  // the data buffer is overwritten by the next write, so there is nothing to discard
+  return(RADIOLIB_ERR_NONE);
 }
 
 int16_t SX128x::launchMode() {
@@ -1630,7 +1666,8 @@ int16_t SX128x::modSetup(uint8_t modem) {
   this->mod->hal->pinMode(this->mod->getGpio(), this->mod->hal->GpioModeInput);
   this->mod->spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_ADDR] = Module::BITS_16;
   this->mod->spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_CMD] = Module::BITS_8;
-  this->mod->spiConfig.statusPos = 1;
+  this->mod->spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_STATUS] = Module::BITS_8;
+  this->mod->spiConfig.statusPos = 0;
   this->mod->spiConfig.cmds[RADIOLIB_MODULE_SPI_COMMAND_READ] = RADIOLIB_SX128X_CMD_READ_REGISTER;
   this->mod->spiConfig.cmds[RADIOLIB_MODULE_SPI_COMMAND_WRITE] = RADIOLIB_SX128X_CMD_WRITE_REGISTER;
   this->mod->spiConfig.cmds[RADIOLIB_MODULE_SPI_COMMAND_NOP] = RADIOLIB_SX128X_CMD_NOP;
@@ -1651,8 +1688,22 @@ int16_t SX128x::modSetup(uint8_t modem) {
 }
 
 uint8_t SX128x::getStatus() {
+  const uint8_t cmd = RADIOLIB_SX128X_CMD_GET_STATUS;
   uint8_t data = 0;
-  this->mod->SPIreadStream(RADIOLIB_SX128X_CMD_GET_STATUS, &data, 0);
+  
+  // unlike SX126x, the very first command byte sent is not reservedm, but the status
+  // to handle this correctly, we have to temporarily set the status width to 0,
+  // and then read one byte
+  this->mod->spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_STATUS] = Module::BITS_0;
+
+  // additionally, to be fully comply with the datasheet, we have to send out the GetStatus command byte
+  // see https://github.com/jgromes/RadioLib/issues/1872 for details
+  this->mod->spiConfig.cmds[RADIOLIB_MODULE_SPI_COMMAND_NOP] = RADIOLIB_SX128X_CMD_GET_STATUS;
+  (void)this->mod->SPItransferStream(NULL, 0, false, &cmd, &data, 1, true);
+
+  // restore everything, GetStatus is the only exchange which behaves like this
+  this->mod->spiConfig.cmds[RADIOLIB_MODULE_SPI_COMMAND_NOP] = RADIOLIB_SX128X_CMD_NOP;
+  this->mod->spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_STATUS] = Module::BITS_8;
   return(data);
 }
 

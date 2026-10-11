@@ -263,6 +263,7 @@ spectralScanGetStatus	KEYWORD2
 spectralScanGetResult	KEYWORD2
 setPaRampTime	KEYWORD2
 hopLRFHSS	KEYWORD2
+setStandbyXOSC	KEYWORD2
 
 # nRF24
 setIrqAction	KEYWORD2
@@ -367,6 +368,8 @@ setModem	KEYWORD2
 getModem	KEYWORD2
 stageMode	KEYWORD2
 launchMode	KEYWORD2
+writeTxBuffer	KEYWORD2
+clearTxBuffer	KEYWORD2
 
 # LoRaWAN
 getBufferNonces	KEYWORD2

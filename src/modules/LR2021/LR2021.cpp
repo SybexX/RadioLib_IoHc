@@ -434,7 +434,7 @@ int16_t LR2021::scanChannel(const ChannelScanConfig_t &cfg) {
 }
 
 int16_t LR2021::standby() {
-  return(this->standby(RADIOLIB_LR2021_STANDBY_RC));
+  return(LR2021::standby(this->standbyXOSC ? RADIOLIB_LR2021_STANDBY_XOSC : RADIOLIB_LR2021_STANDBY_RC));
 }
 
 int16_t LR2021::standby(uint8_t mode) {
@@ -512,8 +512,8 @@ int16_t LR2021::startReceiveDutyCycle(uint32_t rxPeriod, uint32_t sleepPeriod, R
   // divide by 30.517 microseconds (RTC period, 1/32.768 kHz)
   // the datasheet claims the RTC frequency is 32 kHz; however, using that makes the timing inaccurate
   // so it looks like the actual value is the 32.768 kHz used on the previous LR11xx chips
-  uint32_t rxPeriodRaw = (rxPeriod * 32768UL) / 1000000UL;
-  uint32_t sleepPeriodRaw = (sleepPeriod * 32768UL) / 1000000UL;
+  uint32_t rxPeriodRaw = (uint32_t)(((uint64_t)rxPeriod * 32768UL) / 1000000UL);
+  uint32_t sleepPeriodRaw = (uint32_t)(((uint64_t)sleepPeriod * 32768UL) / 1000000UL);
 
   // check 24 bit limit and zero value (likely not intended)
   if((rxPeriodRaw & 0xFF000000) || (rxPeriodRaw == 0)) {
@@ -744,7 +744,8 @@ int16_t LR2021::modSetup(float freq, uint8_t modem) {
   RADIOLIB_DEBUG_BASIC_PRINTLN("M\tLR2021");
 
   // set mode to standby
-  int16_t state = standby();
+  // force the device to use RC oscillator, as XOSC may not be ready yet
+  int16_t state = standby(RADIOLIB_LR2021_STANDBY_RC);
   RADIOLIB_ASSERT(state);
 
   // set TCXO control, if requested
@@ -793,8 +794,8 @@ bool LR2021::findChip(void) {
 }
 
 int16_t LR2021::config(uint8_t modem) {
-  // set Rx/Tx fallback mode to STDBY_RC
-  int16_t state = this->setRxTxFallbackMode(RADIOLIB_LR2021_FALLBACK_MODE_STBY_RC);
+  // set Rx/Tx fallback mode
+  int16_t state = this->setRxTxFallbackMode(this->standbyXOSC ? RADIOLIB_LR2021_FALLBACK_MODE_STBY_XOSC : RADIOLIB_LR2021_FALLBACK_MODE_STBY_RC);
   RADIOLIB_ASSERT(state);
 
   // clear IRQ
@@ -865,7 +866,7 @@ int16_t LR2021::startCad(uint8_t symbolNum, uint8_t detPeak, bool fast, uint8_t 
 
   uint8_t mode = exitMode; 
   if(mode == RADIOLIB_LR2021_CAD_PARAM_DEFAULT) {
-    mode = RADIOLIB_LR2021_CAD_EXIT_MODE_FALLBACK;
+    mode = RADIOLIB_LR2021_LORA_CAD_EXIT_MODE_FALLBACK;
   }
 
   uint32_t timeout_raw = (float)timeout / 30.52f;
@@ -1058,13 +1059,19 @@ int16_t LR2021::stageMode(RadioModeType_t mode, RadioModeConfig_t* cfg) {
       RADIOLIB_ASSERT(state);
 
       if(modem == RADIOLIB_LR2021_PACKET_TYPE_LR_FHSS) {
+        // an LR-FHSS frame is built from the payload in this step, so it cannot be written ahead
+        if(cfg->transmit.data == NULL) {
+          return(RADIOLIB_ERR_UNSUPPORTED);
+        }
+
         // in LR-FHSS mode, the packet is built by the device
         //! \todo [LR2021] add configurable LR-FHSS device offset
         state = LRxxxx::lrFhssBuildFrame(RADIOLIB_LR2021_CMD_LR_FHSS_BUILD_FRAME, this->lrFhssHdrCount, this->lrFhssCr, this->lrFhssGrid, true, this->lrFhssBw, this->lrFhssHopSeq, 0, cfg->transmit.data, cfg->transmit.len);
         RADIOLIB_ASSERT(state);
 
-      } else {
-        // write packet to buffer
+      } else if(cfg->transmit.data != NULL) {
+        // write packet to buffer - unless the caller already did that with writeTxBuffer,
+        // which it signals by leaving the payload pointer empty
         state = writeRadioTxFifo(cfg->transmit.data, cfg->transmit.len);
         RADIOLIB_ASSERT(state);
 
@@ -1081,6 +1088,25 @@ int16_t LR2021::stageMode(RadioModeType_t mode, RadioModeConfig_t* cfg) {
 
   this->stagedMode = mode;
   return(state);
+}
+
+int16_t LR2021::writeTxBuffer(const uint8_t* data, size_t len) {
+  if(data == NULL) {
+    return(RADIOLIB_ERR_NULL_POINTER);
+  }
+  if(len > RADIOLIB_LR2021_MAX_PACKET_LENGTH) {
+    return(RADIOLIB_ERR_PACKET_TOO_LONG);
+  }
+
+  // the transmit FIFO appends, so anything left in it has to go first
+  int16_t state = clearTxFifo();
+  RADIOLIB_ASSERT(state);
+
+  return(writeRadioTxFifo(data, len));
+}
+
+int16_t LR2021::clearTxBuffer() {
+  return(clearTxFifo());
 }
 
 int16_t LR2021::launchMode() {

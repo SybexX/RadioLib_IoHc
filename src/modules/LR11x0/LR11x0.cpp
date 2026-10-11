@@ -323,7 +323,7 @@ int16_t LR11x0::scanChannel(const ChannelScanConfig_t &config) {
 }
 
 int16_t LR11x0::standby() {
-  return(LR11x0::standby(RADIOLIB_LR11X0_STANDBY_RC));
+  return(LR11x0::standby(this->standbyXOSC ? RADIOLIB_LR11X0_STANDBY_XOSC : RADIOLIB_LR11X0_STANDBY_RC));
 }
 
 int16_t LR11x0::standby(uint8_t mode) {
@@ -388,8 +388,8 @@ int16_t LR11x0::startReceiveDutyCycle(uint32_t rxPeriod, uint32_t sleepPeriod, R
   sleepPeriod -= transitionTime;
 
   // divide by 30.517 microseconds (RTC period, 1/32.768 kHz)
-  uint32_t rxPeriodRaw = (rxPeriod * 32768UL) / 1000000UL;
-  uint32_t sleepPeriodRaw = (sleepPeriod * 32768UL) / 1000000UL;
+  uint32_t rxPeriodRaw = (uint32_t)(((uint64_t)rxPeriod * 32768UL) / 1000000UL);
+  uint32_t sleepPeriodRaw = (uint32_t)(((uint64_t)sleepPeriod * 32768UL) / 1000000UL);
 
   // check 24 bit limit and zero value (likely not intended)
   if((rxPeriodRaw & 0xFF000000) || (rxPeriodRaw == 0)) {
@@ -1046,7 +1046,9 @@ int16_t LR11x0::setPreambleLength(size_t preambleLength) {
 
 int16_t LR11x0::setTCXO(float voltage, uint32_t delay) {
   // set mode to standby
-  standby();
+  // force RC oscillator - typically this is called on startup,
+  // so we cannot rely on what the user may have provided
+  (void)standby(RADIOLIB_LR11X0_STANDBY_RC);
 
   // check RADIOLIB_LR11X0_ERROR_STAT_HF_XOSC_START_ERR flag and clear it
   uint16_t errors = 0;
@@ -1322,6 +1324,19 @@ void LR11x0::setRfSwitchTable(const uint32_t (&pins)[Module::RFSWITCH_MAX_PINS],
   this->setDioAsRfSwitch(enable, modes[0], modes[1], modes[2], modes[3], modes[4], modes[5], modes[6]);
 }
 
+int16_t LR11x0::setStandbyXOSC(bool enable) {
+  // set the internal variable
+  this->standbyXOSC = enable;
+
+  // call standby to start the oscillator
+  int16_t state = standby();
+  RADIOLIB_ASSERT(state);
+
+  // update Rx/Tx fallback mode
+  uint8_t mode = this->standbyXOSC ? RADIOLIB_LR11X0_FALLBACK_MODE_STBY_XOSC : RADIOLIB_LR11X0_FALLBACK_MODE_STBY_RC;
+  return(this->setRxTxFallbackMode(mode));
+}
+
 int16_t LR11x0::forceLDRO(bool enable) {
   // check packet type
   uint8_t type = RADIOLIB_LR11X0_PACKET_TYPE_NONE;
@@ -1561,13 +1576,19 @@ int16_t LR11x0::stageMode(RadioModeType_t mode, RadioModeConfig_t* cfg) {
       RADIOLIB_ASSERT(state);
 
       if(modem == RADIOLIB_LR11X0_PACKET_TYPE_LR_FHSS) {
+        // an LR-FHSS frame is built from the payload in this step, so it cannot be written ahead
+        if(cfg->transmit.data == NULL) {
+          return(RADIOLIB_ERR_UNSUPPORTED);
+        }
+
         // in LR-FHSS mode, the packet is built by the device
         // TODO add configurable device offset
         state = LRxxxx::lrFhssBuildFrame(RADIOLIB_LR11X0_CMD_LR_FHSS_BUILD_FRAME, this->lrFhssHdrCount, this->lrFhssCr, this->lrFhssGrid, true, this->lrFhssBw, this->lrFhssHopSeq, 0, cfg->transmit.data, cfg->transmit.len);
         RADIOLIB_ASSERT(state);
 
-      } else {
-        // write packet to buffer
+      } else if(cfg->transmit.data != NULL) {
+        // write packet to buffer - unless the caller already did that with writeTxBuffer,
+        // which it signals by leaving the payload pointer empty
         state = writeBuffer8(cfg->transmit.data, cfg->transmit.len);
         RADIOLIB_ASSERT(state);
 
@@ -1584,6 +1605,23 @@ int16_t LR11x0::stageMode(RadioModeType_t mode, RadioModeConfig_t* cfg) {
 
   this->stagedMode = mode;
   return(state);
+}
+
+int16_t LR11x0::writeTxBuffer(const uint8_t* data, size_t len) {
+  if(data == NULL) {
+    return(RADIOLIB_ERR_NULL_POINTER);
+  }
+  if(len > RADIOLIB_LR11X0_MAX_PACKET_LENGTH) {
+    return(RADIOLIB_ERR_PACKET_TOO_LONG);
+  }
+
+  return(writeBuffer8(data, len));
+}
+
+int16_t LR11x0::clearTxBuffer() {
+  // the transmit buffer is separate from the receive buffer and is overwritten
+  // by the next write, so there is nothing to discard
+  return(RADIOLIB_ERR_NONE);
 }
 
 int16_t LR11x0::launchMode() {
@@ -1669,7 +1707,8 @@ int16_t LR11x0::modSetup(uint8_t modem) {
   RADIOLIB_DEBUG_BASIC_PRINTLN("M\tLR11x0");
 
   // set mode to standby
-  int16_t state = standby();
+  // force the device to use RC oscillator, as XOSC may not be ready yet
+  int16_t state = standby(RADIOLIB_LR11X0_STANDBY_RC);
   RADIOLIB_ASSERT(state);
 
   // set TCXO control, if requested
@@ -1733,8 +1772,8 @@ bool LR11x0::findChip(uint8_t ver) {
 int16_t LR11x0::config(uint8_t modem) {
   int16_t state = RADIOLIB_ERR_UNKNOWN;
 
-  // set Rx/Tx fallback mode to STDBY_RC
-  state = this->setRxTxFallbackMode(RADIOLIB_LR11X0_FALLBACK_MODE_STBY_RC);
+  // set Rx/Tx fallback mode
+  state = this->setRxTxFallbackMode(this->standbyXOSC ? RADIOLIB_LR11X0_FALLBACK_MODE_STBY_XOSC : RADIOLIB_LR11X0_FALLBACK_MODE_STBY_RC);
   RADIOLIB_ASSERT(state);
 
   // clear IRQ

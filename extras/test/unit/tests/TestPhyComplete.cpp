@@ -130,7 +130,7 @@ BOOST_FIXTURE_TEST_CASE(PhyComplete_AllRadios, ModuleFixture) {
     BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
 
     state = radio.phy->getPacketLength();
-    BOOST_TEST(state != 0);
+    BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
 
     state = radio.phy->getRSSI();
     BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
@@ -191,6 +191,12 @@ BOOST_FIXTURE_TEST_CASE(PhyComplete_AllRadios, ModuleFixture) {
     
     radio.phy->stagedMode = RADIOLIB_RADIO_MODE_RX;
     state = radio.phy->launchMode();
+    BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
+
+    state = radio.phy->writeTxBuffer(testBuff, 1);
+    BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
+
+    state = radio.phy->clearTxBuffer();
     BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
   }
   
