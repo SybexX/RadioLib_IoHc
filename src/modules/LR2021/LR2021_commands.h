@@ -54,6 +54,8 @@
 #define RADIOLIB_LR2021_CMD_SET_TCXO_MODE                       (0x0120)
 #define RADIOLIB_LR2021_CMD_ACTIVATE_PRAM                       (0x012D)
 #define RADIOLIB_LR2021_CMD_SET_XOSC_CP_TRIM                    (0x0131)
+#define RADIOLIB_LR2021_CMD_SET_TEMP_COMP_CFG                   (0x0132)
+#define RADIOLIB_LR2021_CMD_SET_NTC_PARAMS                      (0x0133)
 #define RADIOLIB_LR2021_CMD_SET_RF_FREQUENCY                    (0x0200)
 #define RADIOLIB_LR2021_CMD_SET_RX_PATH                         (0x0201)
 #define RADIOLIB_LR2021_CMD_GET_RSSI_INST                       (0x020B)
@@ -107,6 +109,7 @@
 #define RADIOLIB_LR2021_CMD_GET_WISUN_RX_STATS                  (0x0272)
 #define RADIOLIB_LR2021_CMD_GET_WISUN_PACKET_STATUS             (0x0273)
 #define RADIOLIB_LR2021_CMD_SET_WISUN_PACKET_LEN                (0x0274)
+#define RADIOLIB_LR2021_CMD_SET_SOURCE2                         (0x0290)
 #define RADIOLIB_LR2021_CMD_SET_ZWAVE_PARAMS                    (0x0297)
 #define RADIOLIB_LR2021_CMD_SET_ZWAVE_HOME_ID_FILTERING         (0x0298)
 #define RADIOLIB_LR2021_CMD_GET_ZWAVE_RX_STATS                  (0x0299)
@@ -246,8 +249,8 @@
 // RADIOLIB_LR2021_CMD_CALIB_FRONT_END
 #define RADIOLIB_LR2021_CALIBRATE_FE_LF_PATH                    (0x00UL << 15)  // 15    15     calibration path: low-frequency
 #define RADIOLIB_LR2021_CALIBRATE_FE_HF_PATH                    (0x01UL << 15)  // 15    15                       high-frequency
-#define RADIOLIB_LR2021_CAL_IMG_FREQ_TRIG_MHZ                   (20.0f)
-#define RADIOLIB_LR2021_LF_CUTOFF_FREQ                          (1500.0f)
+#define RADIOLIB_LR2021_CAL_IMG_FREQ_TRIG_MHZ                   (RADIOLIB_UNIT_MEGA(20))
+#define RADIOLIB_LR2021_LF_CUTOFF_FREQ                          (RADIOLIB_UNIT_MEGA(1500))
 
 // RADIOLIB_LR2021_CMD_GET_V_BAT
 #define RADIOLIB_LR2021_VBAT_FORMAT_RAW                         (0x00UL << 3)   //  3     3     readout format: raw
@@ -324,6 +327,12 @@
 #define RADIOLIB_LR2021_LF_CLOCK_INTERNAL_RC                    (0x00UL << 0)   //  7     0     low-frequency source: internal 32 kHz RC oscillator
 #define RADIOLIB_LR2021_LF_CLOCK_EXTERNAL                       (0x02UL << 0)   //  7     0                           external 32.768 kHz signal on DIO11
 
+// RADIOLIB_LR2021_CMD_SET_TEMP_COMP_CFG
+#define RADIOLIB_LR2021_TEMP_COMP_DISABLED                      (0x00UL << 0)   //  1     0     crystal temperature compensation: disabled
+#define RADIOLIB_LR2021_TEMP_COMP_RELATIVE                      (0x01UL << 0)   //  1     0                                       relative (packet start to end)
+#define RADIOLIB_LR2021_TEMP_COMP_ABSOLUTE                      (0x02UL << 0)   //  1     0                                       absolute
+#define RADIOLIB_LR2021_TEMP_COMP_NTC_ENABLED                   (0x01UL << 2)   //  2     2     external NTC sensor: enabled
+
 // RADIOLIB_LR2021_CMD_SET_RX_PATH
 #define RADIOLIB_LR2021_RX_PATH_LF                              (0x00UL << 0)   //  7     0     Rx path: low-frequency
 #define RADIOLIB_LR2021_RX_PATH_HF                              (0x01UL << 0)   //  7     0              high-frequency
@@ -378,6 +387,10 @@
 #define RADIOLIB_LR2021_PACKET_TYPE_NONE                        (0xFFUL << 0)   //  2     0                  none
 
 // RADIOLIB_LR2021_CMD_SET_LORA_MODULATION_PARAMS
+#define RADIOLIB_LR2021_LORA_BW_8                               (0x00UL << 0)   //  3     0
+#define RADIOLIB_LR2021_LORA_BW_10                              (0x08UL << 0)   //  3     0
+#define RADIOLIB_LR2021_LORA_BW_16                              (0x01UL << 0)   //  3     0
+#define RADIOLIB_LR2021_LORA_BW_21                              (0x09UL << 0)   //  3     0
 #define RADIOLIB_LR2021_LORA_BW_31                              (0x02UL << 0)   //  3     0     LoRa bandwidth: 31.25 kHz
 #define RADIOLIB_LR2021_LORA_BW_41                              (0x0AUL << 0)   //  3     0                     41.67 kHz
 #define RADIOLIB_LR2021_LORA_BW_83                              (0x0BUL << 0)   //  3     0                     83.34 kHz

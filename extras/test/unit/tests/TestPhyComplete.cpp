@@ -18,6 +18,7 @@
 #include "modules/LR11x0/LR1120.h"
 #include "modules/LR11x0/LR1121.h"
 #include "modules/LR2021/LR2021.h"
+#include "modules/LR2021/LR2012.h"
 
 BOOST_FIXTURE_TEST_SUITE(suite_PhyComplete, ModuleFixture)
 
@@ -46,6 +47,7 @@ BOOST_FIXTURE_TEST_CASE(PhyComplete_AllRadios, ModuleFixture) {
     { "LR1120", new LR1120(mod) },
     { "LR1121", new LR1121(mod) },
     { "LR2021", new LR2021(mod) },
+    { "LR2012", new LR2012(mod) },
   };
 
   int state;
@@ -95,6 +97,15 @@ BOOST_FIXTURE_TEST_CASE(PhyComplete_AllRadios, ModuleFixture) {
     state = radio.phy->setFrequency(0);
     BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
 
+    state = radio.phy->setBandwidth(0);
+    BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
+
+    state = radio.phy->setSpreadingFactor(0);
+    BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
+
+    state = radio.phy->setCodingRate(0);
+    BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
+
     state = radio.phy->setBitRate(0);
     BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
 
@@ -111,9 +122,6 @@ BOOST_FIXTURE_TEST_CASE(PhyComplete_AllRadios, ModuleFixture) {
     BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
 
     state = radio.phy->setOutputPower(0);
-    BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
-
-    state = radio.phy->checkOutputPower(0, nullptr);
     BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
 
     state = radio.phy->setSyncWord(testBuff, 1);
@@ -188,7 +196,7 @@ BOOST_FIXTURE_TEST_CASE(PhyComplete_AllRadios, ModuleFixture) {
     state = radio.phy->getMode(&radioMode);
     BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);
     
-    RadioModeConfig_t cfg = { .receive = { .timeout = 0, .irqFlags = RADIOLIB_IRQ_RX_DEFAULT_FLAGS, 
+    RadioModeConfig_t cfg = { .receive = { .timeout = 0, .syncSymbols = 0, .irqFlags = RADIOLIB_IRQ_RX_DEFAULT_FLAGS,
       .irqMask = RADIOLIB_IRQ_RX_DEFAULT_MASK, .len = 0 }};
     state = radio.phy->stageMode(RADIOLIB_RADIO_MODE_RX, &cfg);
     BOOST_TEST(state != RADIOLIB_ERR_UNSUPPORTED);

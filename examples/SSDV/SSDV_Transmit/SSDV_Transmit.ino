@@ -35,7 +35,7 @@ Radio radio = new RadioModule();
 
 // SSDV client
 // for LoRa we use no-FEC mode (LoRa has its own FEC).
-// set the second argument to 'true' for RTTY / FSK links that need RS-FEC.
+// set the second argument to 'true' for FSK links that need RS-FEC.
 SSDVClient ssdv(&radio, false);
 
 void setup() {
@@ -45,8 +45,8 @@ void setup() {
 
   // initialise the radio
   ConfigLoRa_t config;
-  config.frequency = 434.250;
-  config.bandwidth = 62.5;
+  config.frequency = RADIOLIB_UNIT_KILO(434250);
+  config.bandwidth = 62500;
   int16_t state = radio.begin(config);
 
   if(state != RADIOLIB_ERR_NONE) {
@@ -70,7 +70,6 @@ void setup() {
   if(state != RADIOLIB_ERR_NONE) {
     Serial.print(F("setImage() failed: "));
     Serial.println(state);
-
     while(true) { delay(1000); }
   }
 
@@ -84,16 +83,13 @@ void loop() {
     // frame here, or alternate SSDV with other telemetry strings.
     Serial.println(F("All packets sent. Stopping..."));
     ssdv.clearImage();      // or load a new image
-    while(1) {
-      yield();
-    }
+    while(true) { delay(1000); }
   }
 
   uint16_t packetId = 0;
 
-  // use transmitLoRa() to send 255 bytes (skips 0x55 sync byte).
-  // use transmit() instead for RTTY/FSK where the sync byte is needed.
-  int16_t result = ssdv.transmitLoRa(&packetId);
+  // send the next packet
+  int16_t result = ssdv.transmit(&packetId);
 
   if(result < 0) {
     Serial.print(F("Radio error: "));
